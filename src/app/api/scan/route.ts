@@ -19,7 +19,9 @@ export async function POST(req: NextRequest) {
 
     const bytes = await imageFile.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
-    const mediaType = imageFile.type as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    // Normalize image/jpg → image/jpeg (image/jpg is non-standard and rejected by Anthropic)
+    const mediaType = (imageFile.type === "image/jpg" ? "image/jpeg" : imageFile.type) as
+      "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -34,33 +36,72 @@ export async function POST(req: NextRequest) {
             },
             {
               type: "text",
-              text: `Extract the product name and price from this image.
-Look for price tags, shelf labels, product packaging, or any visible pricing.
-The price should be in euros. If you see a different currency, convert approximately.
-Respond ONLY with valid JSON — no markdown, no explanation:
-{"productName": "name here", "price": 0.00}
-If you cannot confidently identify the name or price, use null for that field.`,
+              text: `You are an AI that analyzes images for a financial assistant app.
+
+Determine if the image contains a purchasable product. If yes, extract the product name and price.
+
+Return ONLY valid JSON. No text before or after.
+
+Rules:
+* Only return isProduct: true if this is clearly a purchasable product (electronics, clothing, shoes, etc.)
+* Do not guess or hallucinate
+* If unsure, return isProduct: false
+* If price is not visible, return price: null
+* Product name must be specific (brand + model if possible)
+* If price is in a currency other than euros, convert it approximately
+* price must be a number (e.g. 9.99), never a string
+
+If product: {"isProduct": true, "name": "product name", "price": 9.99}
+If not:     {"isProduct": false}`,
             },
           ],
         },
       ],
     });
 
+    console.log("Vision API raw response:", JSON.stringify(message, null, 2));
+
     const content = message.content[0];
     if (content.type !== "text") {
-      return NextResponse.json({ productName: null, price: null });
+      console.warn("Vision API: unexpected non-text content block");
+      return NextResponse.json({ name: null, price: null });
     }
 
-    const jsonMatch = content.text.match(/\{[\s\S]*?\}/);
+    // Strip markdown code fences if present, then extract the JSON object
+    const cleaned = content.text.replace(/```(?:json)?/gi, "").trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+
     if (!jsonMatch) {
-      return NextResponse.json({ productName: null, price: null });
+      console.warn("Vision API: no JSON found in response:", content.text);
+      return NextResponse.json({ name: null, price: null });
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    return NextResponse.json({
-      productName: typeof parsed.productName === "string" ? parsed.productName : null,
-      price: typeof parsed.price === "number" ? parsed.price : null,
-    });
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (parseErr) {
+      console.warn("Vision API: JSON.parse failed:", jsonMatch[0], parseErr);
+      return NextResponse.json({ name: null, price: null });
+    }
+
+    // Not a purchasable product
+    if (parsed.isProduct === false) {
+      return NextResponse.json({ name: null, price: null, isProduct: false });
+    }
+
+    const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : null;
+    const price = typeof parsed.price === "number" ? parsed.price : null;
+
+    if (!name && price === null) {
+      return NextResponse.json({ name: null, price: null });
+    }
+
+    // Name found but no price — let the user fill it in
+    if (name && price === null) {
+      return NextResponse.json({ name, price: null, needsManualPrice: true });
+    }
+
+    return NextResponse.json({ name, price });
   } catch (err) {
     console.error("Scan error:", err);
     return NextResponse.json({ error: "Image scan failed." }, { status: 500 });

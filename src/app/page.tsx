@@ -8,9 +8,10 @@ const RECOMMENDATION_CONFIG: Record<
   Recommendation,
   { label: string; emoji: string; bg: string; border: string; text: string }
 > = {
-  BUY:                { label: 'Go ahead and buy it',   emoji: '✅', bg: 'bg-emerald-50', border: 'border-emerald-400', text: 'text-emerald-800' },
-  WAIT:               { label: 'Better to wait',        emoji: '⏳', bg: 'bg-amber-50',   border: 'border-amber-400',   text: 'text-amber-800'   },
-  CHOOSE_ALTERNATIVE: { label: 'Choose an alternative', emoji: '🔀', bg: 'bg-blue-50',    border: 'border-blue-400',    text: 'text-blue-800'    },
+  BUY:                { label: 'Go ahead and buy it',        emoji: '✅', bg: 'bg-emerald-50', border: 'border-emerald-400', text: 'text-emerald-800' },
+  WAIT:               { label: 'Better to wait',             emoji: '⏳', bg: 'bg-amber-50',   border: 'border-amber-400',   text: 'text-amber-800'   },
+  CHOOSE_ALTERNATIVE: { label: 'Choose an alternative',      emoji: '🔀', bg: 'bg-blue-50',    border: 'border-blue-400',    text: 'text-blue-800'    },
+  PRICE_NEEDED:       { label: 'Add price for full analysis', emoji: '💰', bg: 'bg-gray-50',   border: 'border-gray-300',    text: 'text-gray-700'    },
 };
 
 const PRICE_STATUS_CONFIG = {
@@ -54,14 +55,20 @@ export default function Home() {
       const res = await fetch('/api/scan', { method: 'POST', body: formData });
       const data = await res.json();
 
-      if (data.productName) setProductName(data.productName);
+      if (data.name) setProductName(data.name);
       if (data.price != null) setProductPrice(String(data.price));
 
-      setScanHint(
-        data.productName || data.price != null
-          ? `Detected: ${data.productName ?? '?'} — €${data.price ?? '?'}`
-          : 'Could not read product info — fill in manually'
-      );
+      if (data.error) {
+        setScanHint(`Scan error: ${data.error}`);
+      } else if (data.isProduct === false) {
+        setScanHint('No product detected in this image — fill in manually');
+      } else if (data.name && data.needsManualPrice) {
+        setScanHint(`Found "${data.name}" — please enter the price manually`);
+      } else if (data.name || data.price != null) {
+        setScanHint(`Detected: ${data.name ?? '?'} — €${data.price ?? '?'}`);
+      } else {
+        setScanHint('Could not read product info — fill in manually');
+      }
     } catch {
       setScanHint('Scan failed — fill in manually');
     } finally {
@@ -105,7 +112,7 @@ export default function Home() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!productName.trim() || !productPrice) return;
+    if (!productName.trim()) return;
 
     setLoading(true);
     setError('');
@@ -117,7 +124,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productName: productName.trim(),
-          productPrice: parseFloat(productPrice),
+          productPrice: productPrice ? parseFloat(productPrice) : undefined,
           productUrl: productUrl.trim() || undefined,
           userBudget: userBudget ? parseFloat(userBudget) : undefined,
         }),
@@ -233,7 +240,7 @@ export default function Home() {
               </div>
             } />
 
-            <button type="submit" disabled={loading || !productName.trim() || !productPrice}
+            <button type="submit" disabled={loading || !productName.trim()}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:cursor-not-allowed text-white disabled:text-gray-400 font-semibold py-3 rounded-xl text-sm transition-colors">
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -241,9 +248,9 @@ export default function Home() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Analyzing…
+                  {productPrice ? 'Analyzing…' : 'Finding alternatives…'}
                 </span>
-              ) : 'Analyze Purchase →'}
+              ) : productPrice ? 'Analyze Purchase →' : 'Find Alternatives →'}
             </button>
           </form>
         </section>
@@ -281,19 +288,29 @@ function AnalysisResults({ result }: { result: AnalysisResult }) {
   return (
     <div className="space-y-4">
 
-      {/* Recommendation */}
-      <div className={`rounded-2xl border-2 ${cfg.border} ${cfg.bg} p-5`}>
-        <div className="flex items-center gap-4">
-          <span className="text-5xl leading-none">{cfg.emoji}</span>
+      {/* Recommendation or price prompt */}
+      {result.recommendation === 'PRICE_NEEDED' ? (
+        <div className="rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-5 flex items-center gap-4">
+          <span className="text-4xl leading-none">💰</span>
           <div>
-            <p className={`text-xs font-semibold uppercase tracking-widest opacity-60 ${cfg.text}`}>Recommendation</p>
-            <p className={`text-2xl font-bold ${cfg.text}`}>
-              {result.recommendation === 'BUY' ? 'Buy' : result.recommendation === 'WAIT' ? 'Wait' : 'Choose Alternative'}
-            </p>
-            <p className={`text-sm mt-0.5 opacity-80 ${cfg.text}`}>{cfg.label}</p>
+            <p className="text-sm font-semibold text-gray-800">Enter the product price for a precise verdict</p>
+            <p className="text-xs text-gray-500 mt-0.5">We found alternatives below — add the price above and re-analyze for a BUY / WAIT / SWITCH recommendation.</p>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className={`rounded-2xl border-2 ${cfg.border} ${cfg.bg} p-5`}>
+          <div className="flex items-center gap-4">
+            <span className="text-5xl leading-none">{cfg.emoji}</span>
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-widest opacity-60 ${cfg.text}`}>Recommendation</p>
+              <p className={`text-2xl font-bold ${cfg.text}`}>
+                {result.recommendation === 'BUY' ? 'Buy' : result.recommendation === 'WAIT' ? 'Wait' : 'Choose Alternative'}
+              </p>
+              <p className={`text-sm mt-0.5 opacity-80 ${cfg.text}`}>{cfg.label}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Product */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
@@ -318,8 +335,10 @@ function AnalysisResults({ result }: { result: AnalysisResult }) {
       {/* Retailer comparison */}
       {result.retailers.length > 0 && <RetailerCard retailers={result.retailers} productPrice={result.productPrice} />}
 
-      {/* Price history */}
-      <PriceHistoryCard history={result.priceHistory} currentPrice={result.productPrice} />
+      {/* Price history — only when price is known */}
+      {result.priceHistory && (
+        <PriceHistoryCard history={result.priceHistory} currentPrice={result.productPrice} />
+      )}
 
       {/* Similar alternatives */}
       {result.alternatives.length > 0 && (
@@ -345,8 +364,8 @@ function AnalysisResults({ result }: { result: AnalysisResult }) {
         </div>
       )}
 
-      {/* Best saving */}
-      {result.estimatedSavings > 0 && (
+      {/* Best saving — only meaningful when price is known */}
+      {result.priceKnown && result.estimatedSavings > 0 && (
         <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-5 flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-emerald-800">Best Possible Saving</p>
@@ -359,11 +378,13 @@ function AnalysisResults({ result }: { result: AnalysisResult }) {
         </div>
       )}
 
-      {/* AI Explanation */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Why this recommendation?</h3>
-        <p className="text-sm text-gray-700 leading-relaxed">{result.explanation}</p>
-      </div>
+      {/* AI Explanation — hidden when price is unknown */}
+      {result.priceKnown && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Why this recommendation?</h3>
+          <p className="text-sm text-gray-700 leading-relaxed">{result.explanation}</p>
+        </div>
+      )}
 
     </div>
   );

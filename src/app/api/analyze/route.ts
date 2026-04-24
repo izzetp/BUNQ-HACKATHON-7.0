@@ -12,16 +12,19 @@ export async function POST(req: NextRequest) {
     if (!productName || typeof productName !== "string") {
       return NextResponse.json({ error: "Product name is required." }, { status: 400 });
     }
-    if (!productPrice || typeof productPrice !== "number" || productPrice <= 0) {
-      return NextResponse.json({ error: "A valid product price is required." }, { status: 400 });
-    }
+    const price = typeof productPrice === "number" && productPrice > 0 ? productPrice : 0;
 
     const result = analyzeProduct(
       productName.trim(),
-      productPrice,
+      price,
       productUrl?.trim() || undefined,
       typeof userBudget === "number" && userBudget > 0 ? userBudget : undefined
     );
+
+    // Skip AI explanation when price is unknown — static message is sufficient
+    if (result.recommendation === "PRICE_NEEDED") {
+      return NextResponse.json(result);
+    }
 
     const aiExplanation = await generateExplanation(result);
     return NextResponse.json({ ...result, explanation: aiExplanation });
@@ -36,6 +39,8 @@ async function generateExplanation(result: ReturnType<typeof analyzeProduct>): P
     savingsPercent, categoryLabel, priceHistory, budgetCheck,
     cheapestRetailer, retailerSavings,
   } = result;
+
+  if (!priceHistory) return result.explanation;
 
   try {
     const message = await anthropic.messages.create({

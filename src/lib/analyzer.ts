@@ -8,7 +8,7 @@ import {
   PriceHistory,
 } from "./mockData";
 
-export type Recommendation = "BUY" | "WAIT" | "CHOOSE_ALTERNATIVE";
+export type Recommendation = "BUY" | "WAIT" | "CHOOSE_ALTERNATIVE" | "PRICE_NEEDED";
 
 export interface BudgetCheck {
   userBudget: number;
@@ -34,19 +34,22 @@ export interface AnalysisResult {
   estimatedSavings: number;
   savingsPercent: number;
 
-  priceHistory: PriceHistory;
+  priceHistory?: PriceHistory; // absent when price is unknown
   budgetCheck?: BudgetCheck;
 
   recommendation: Recommendation;
+  confidence: number; // 0–100
   explanation: string;
+  priceKnown: boolean;
 }
 
 export function analyzeProduct(
   productName: string,
-  productPrice: number,
+  productPrice: number = 0,
   productUrl?: string,
   userBudget?: number
 ): AnalysisResult {
+  const priceKnown = productPrice > 0;
   const category = findCategory(productName);
   const categoryData = { label: getCategoryLabel(category) };
   const lower = productName.toLowerCase();
@@ -58,6 +61,30 @@ export function analyzeProduct(
       alternatives = entry.alternatives;
       break;
     }
+  }
+
+  // No price — return alternatives only, skip all price-based logic
+  if (!priceKnown) {
+    const alts = alternatives.slice(0, 3);
+    return {
+      productName,
+      productPrice: 0,
+      productUrl,
+      category,
+      categoryLabel: categoryData.label,
+      retailers: [],
+      cheapestRetailer: null,
+      retailerSavings: 0,
+      alternatives: alts,
+      bestAlternative: alts[0] ?? null,
+      estimatedSavings: 0,
+      savingsPercent: 0,
+      budgetCheck: undefined,
+      recommendation: "PRICE_NEEDED",
+      confidence: 0,
+      explanation: "Enter the product price for a precise verdict.",
+      priceKnown: false,
+    };
   }
 
   const cheaperAlternatives = alternatives
@@ -96,18 +123,12 @@ export function analyzeProduct(
     };
   }
 
-  // Recommendation
-  let recommendation: Recommendation;
-  if (budgetCheck && !budgetCheck.withinBudget) {
-    recommendation = budgetCheck.canAffordAnyAlternative ? "CHOOSE_ALTERNATIVE" : "WAIT";
-  } else if (savingsPercent >= 20 && bestAlternative) {
-    recommendation = "CHOOSE_ALTERNATIVE";
-  } else {
-    recommendation = "BUY";
-  }
+  const { recommendation, confidence } = computeDecision(
+    productPrice, bestAlternative, estimatedSavings, savingsPercent, priceHistory, budgetCheck
+  );
 
   const explanation = buildExplanation(
-    productName, productPrice, recommendation,
+    productName, productPrice, recommendation, confidence,
     bestAlternative, estimatedSavings, savingsPercent,
     priceHistory, budgetCheck,
     cheapestRetailer, retailerSavings
@@ -129,14 +150,97 @@ export function analyzeProduct(
     priceHistory,
     budgetCheck,
     recommendation,
+    confidence,
     explanation,
+    priceKnown: true,
   };
+}
+
+// Savings below both thresholds are not worth switching for.
+const MIN_SAVINGS_ABS = 10;   // €10 minimum to matter
+const MIN_SAVINGS_PCT = 5;    // 5% minimum to matter
+const STRONG_SAVINGS_PCT = 25;
+const STRONG_SAVINGS_ABS = 75;
+const HIGH_PRICE_THRESHOLD_PCT = 15; // % above 6-month avg before suggesting WAIT
+
+function computeDecision(
+  productPrice: number,
+  bestAlternative: Alternative | null,
+  estimatedSavings: number,
+  savingsPercent: number,
+  priceHistory: PriceHistory,
+  budgetCheck?: BudgetCheck
+): { recommendation: Recommendation; confidence: number } {
+
+  // 1. Over budget — strongest signal
+  if (budgetCheck && !budgetCheck.withinBudget) {
+    const overRatio = budgetCheck.overBy / budgetCheck.userBudget;
+    if (budgetCheck.canAffordAnyAlternative) {
+      const confidence = clamp(70 + Math.round(overRatio * 60), 70, 93);
+      return { recommendation: "CHOOSE_ALTERNATIVE", confidence };
+    } else {
+      const confidence = clamp(62 + Math.round(overRatio * 50), 62, 88);
+      return { recommendation: "WAIT", confidence };
+    }
+  }
+
+  const hasMeaningfulSavings =
+    estimatedSavings >= MIN_SAVINGS_ABS && savingsPercent >= MIN_SAVINGS_PCT;
+  const hasStrongSavings =
+    savingsPercent >= STRONG_SAVINGS_PCT || estimatedSavings >= STRONG_SAVINGS_ABS;
+
+  // 2. Strong alternative savings
+  if (bestAlternative && hasMeaningfulSavings && hasStrongSavings) {
+    let confidence = 72;
+    if (savingsPercent >= 35 || estimatedSavings >= 150) confidence += 15;
+    else if (savingsPercent >= 25 || estimatedSavings >= 75) confidence += 8;
+    // Buying at a historically great price slightly undermines the switch signal
+    if (priceHistory.priceStatus === "great_deal") confidence -= 8;
+    return { recommendation: "CHOOSE_ALTERNATIVE", confidence: clamp(confidence, 55, 93) };
+  }
+
+  // 3. Moderate savings — let price history tip the balance
+  if (bestAlternative && hasMeaningfulSavings) {
+    if (priceHistory.priceStatus === "great_deal") {
+      return { recommendation: "BUY", confidence: 74 };
+    }
+    if (priceHistory.priceStatus === "good_price") {
+      return { recommendation: "BUY", confidence: 64 };
+    }
+    // Moderate switch signal; confidence reflects it's a close call
+    const confidence = clamp(52 + (savingsPercent >= 15 ? 10 : 0), 52, 72);
+    return { recommendation: "CHOOSE_ALTERNATIVE", confidence };
+  }
+
+  // 4. Price well above average, no compelling alternative → WAIT
+  if (priceHistory.percentVsAvg >= HIGH_PRICE_THRESHOLD_PCT) {
+    let confidence = 55;
+    if (priceHistory.priceStatus === "overpriced") confidence += 20;
+    else if (priceHistory.priceStatus === "above_average") confidence += 10;
+    if (priceHistory.allTimeLow && priceHistory.allTimeLow < productPrice * 0.8) confidence += 8;
+    return { recommendation: "WAIT", confidence: clamp(confidence, 55, 88) };
+  }
+
+  // 5. Default BUY — adjust confidence by price history
+  let confidence = 62;
+  if (priceHistory.priceStatus === "great_deal") confidence += 22;
+  else if (priceHistory.priceStatus === "good_price") confidence += 12;
+  else if (priceHistory.priceStatus === "above_average") confidence -= 10;
+  else if (priceHistory.priceStatus === "overpriced") confidence -= 20;
+  // No meaningful alternative reinforces BUY
+  if (!hasMeaningfulSavings) confidence += 8;
+  return { recommendation: "BUY", confidence: clamp(confidence, 30, 90) };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function buildExplanation(
   productName: string,
   price: number,
   recommendation: Recommendation,
+  confidence: number,
   bestAlt: Alternative | null,
   savings: number,
   savingsPct: number,
@@ -145,41 +249,64 @@ function buildExplanation(
   cheapestRetailer?: RetailerPrice | null,
   retailerSavings?: number
 ): string {
+  const certainty = confidence >= 80 ? "Strongly" : confidence >= 65 ? "Likely" : "Possibly";
+
   switch (recommendation) {
-    case "CHOOSE_ALTERNATIVE":
+    case "CHOOSE_ALTERNATIVE": {
       if (budgetCheck && !budgetCheck.withinBudget && budgetCheck.bestOptionInBudget) {
+        const alt = budgetCheck.bestOptionInBudget;
+        const priceNote =
+          priceHistory.priceStatus === "above_average" || priceHistory.priceStatus === "overpriced"
+            ? " The current price is also above the 6-month average."
+            : "";
         return (
-          `${productName} at €${price} exceeds your €${budgetCheck.userBudget} budget by €${budgetCheck.overBy}. ` +
-          `${budgetCheck.bestOptionInBudget.name} at €${budgetCheck.bestOptionInBudget.price} fits your budget. ` +
-          `${priceHistory.priceStatus === "above_average" || priceHistory.priceStatus === "overpriced" ? "The current price is also above the 6-month average — consider waiting for a deal." : ""}`
+          `${certainty} switch. ${productName} at €${price} exceeds your €${budgetCheck.userBudget} budget by €${budgetCheck.overBy}. ` +
+          `${alt.name} at €${alt.price} fits your budget and saves you €${price - alt.price}.${priceNote}`
         );
       }
+      const retailerNote =
+        cheapestRetailer && retailerSavings && retailerSavings > 0
+          ? ` Still want this one? ${cheapestRetailer.retailer} has it for €${cheapestRetailer.price}.`
+          : "";
       return (
-        `${bestAlt?.name} at €${bestAlt?.price} saves you €${savings} (${savingsPct}%) for similar functionality. ` +
-        `${cheapestRetailer && retailerSavings && retailerSavings > 0 ? `If you still prefer this product, ${cheapestRetailer.retailer} has it for €${cheapestRetailer.price}.` : ""}`
+        `${certainty} switch. ${bestAlt?.name} at €${bestAlt?.price} saves you €${savings} (${savingsPct}%) for similar functionality.${retailerNote}`
       );
+    }
 
-    case "WAIT":
+    case "WAIT": {
       if (budgetCheck && !budgetCheck.withinBudget) {
         return (
-          `At €${price}, this is €${budgetCheck.overBy} over your €${budgetCheck.userBudget} budget, and no alternatives fit within it. ` +
-          `The 6-month average price is €${priceHistory.sixMonthAvg} — consider waiting for a price drop or saving a bit more.`
+          `${certainty} wait. At €${price}, this is €${budgetCheck.overBy} over your €${budgetCheck.userBudget} budget and no alternatives fit within it. ` +
+          `The 6-month average is €${priceHistory.sixMonthAvg} — consider waiting for a price drop.`
         );
       }
+      const lowNote =
+        priceHistory.allTimeLow && priceHistory.allTimeLow < price * 0.85
+          ? ` It has been as low as €${priceHistory.allTimeLow} historically.`
+          : "";
       return (
-        `The current price of €${price} is ${priceHistory.percentVsAvg > 0 ? `${priceHistory.percentVsAvg}% above` : "near"} the 6-month average. ` +
-        `${priceHistory.allTimeLow ? `It has been as low as €${priceHistory.allTimeLow} historically.` : ""} Consider waiting for a better deal.`
+        `${certainty} wait. The current price (€${price}) is ${priceHistory.percentVsAvg}% above the 6-month average of €${priceHistory.sixMonthAvg}.${lowNote} A better deal is likely.`
       );
+    }
 
-    case "BUY":
-      return (
-        `${priceHistory.priceStatus === "great_deal" || priceHistory.priceStatus === "good_price"
+    case "BUY": {
+      const timingNote =
+        priceHistory.priceStatus === "great_deal"
+          ? `Great timing — you're buying well below the 6-month average of €${priceHistory.sixMonthAvg}.`
+          : priceHistory.priceStatus === "good_price"
           ? `Good timing — you're buying below the 6-month average of €${priceHistory.sixMonthAvg}.`
-          : `This is fairly priced relative to recent history.`} ` +
-        `${cheapestRetailer && retailerSavings && retailerSavings > 0
-          ? `Check ${cheapestRetailer.retailer} at €${cheapestRetailer.price} to save €${retailerSavings}.`
-          : savingsPct > 0 ? `You could save €${savings} with ${bestAlt?.name}, but if you prefer this product, it's a reasonable buy.` : "No significantly cheaper alternatives found."}`
-      );
+          : `Fairly priced relative to the 6-month average of €${priceHistory.sixMonthAvg}.`;
+      const altNote =
+        cheapestRetailer && retailerSavings && retailerSavings > 0
+          ? ` Check ${cheapestRetailer.retailer} at €${cheapestRetailer.price} to save €${retailerSavings}.`
+          : savings > 0 && savingsPct >= MIN_SAVINGS_PCT
+          ? ` You could save €${savings} with ${bestAlt?.name}, but the switch is marginal.`
+          : "";
+      return `${certainty} buy. ${timingNote}${altNote}`;
+    }
+
+    default:
+      return "Enter the product price for a precise verdict.";
   }
 }
 
