@@ -1,27 +1,42 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import type { AnalysisResult, Recommendation, BudgetCheck } from '@/lib/analyzer';
-import type { RetailerPrice, PriceHistory } from '@/lib/mockData';
+import { useState, useRef, useEffect } from 'react';
+import type { AnalysisResult, Recommendation } from '@/lib/analyzer';
+import type { Alternative } from '@/lib/mockData';
 
-const VERDICT_CONFIG: Record<Recommendation, {
+/* ── Brand config ────────────────────────────────────────────────────── */
+
+const VERDICT: Record<Recommendation, {
   label: string;
-  verdict: string;
-  verdictColor: string;
+  textClass: string; bgClass: string; borderClass: string;
 }> = {
-  BUY:                { label: 'Go for it',             verdict: 'Buy it',  verdictColor: 'text-green-400'   },
-  WAIT:               { label: 'Timing is off',         verdict: 'Wait',    verdictColor: 'text-amber-400'   },
-  CHOOSE_ALTERNATIVE: { label: 'Better option found',   verdict: 'Switch',  verdictColor: 'text-[#FF7819]'   },
-  PRICE_NEEDED:       { label: 'Add price to continue', verdict: '—',       verdictColor: 'text-gray-500'    },
+  BUY:                { label: 'Buy this',       textClass: 'text-[#34CC8D]', bgClass: 'bg-[#34CC8D]/10', borderClass: 'border-[#34CC8D]/20' },
+  WAIT:               { label: 'Wait',           textClass: 'text-[#FF7819]', bgClass: 'bg-[#FF7819]/10', borderClass: 'border-[#FF7819]/20' },
+  CHOOSE_ALTERNATIVE: { label: "Don't buy this", textClass: 'text-[#E63223]', bgClass: 'bg-[#E63223]/10', borderClass: 'border-[#E63223]/20' },
+  PRICE_NEEDED:       { label: 'Add a price',    textClass: 'text-gray-500',  bgClass: 'bg-white/[0.03]', borderClass: 'border-white/[0.08]' },
 };
 
-const PRICE_STATUS_CONFIG = {
-  great_deal:    { label: '🔥 Great deal',    bg: 'bg-green-500/10',  text: 'text-green-400'  },
-  good_price:    { label: '👍 Good price',    bg: 'bg-green-500/10',  text: 'text-green-400'  },
-  fair:          { label: '➡ Fair price',     bg: 'bg-white/10',      text: 'text-gray-300'   },
-  above_average: { label: '⚠ Above average', bg: 'bg-amber-500/10',  text: 'text-amber-400'  },
-  overpriced:    { label: '🚨 Overpriced',    bg: 'bg-red-500/10',    text: 'text-red-400'    },
-};
+/* ── Tiny shared components ──────────────────────────────────────────── */
+
+function Spinner({ size = 'md', className = '' }: { size?: 'sm' | 'md'; className?: string }) {
+  return (
+    <svg className={`animate-spin ${size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'} ${className}`} fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+    </svg>
+  );
+}
+
+function CameraIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+    </svg>
+  );
+}
+
+/* ── Page ────────────────────────────────────────────────────────────── */
 
 export default function Home() {
   const [productName, setProductName]   = useState('');
@@ -37,7 +52,14 @@ export default function Home() {
   const [scanHint, setScanHint]         = useState('');
   const [fetchingUrl, setFetchingUrl]   = useState(false);
   const [urlHint, setUrlHint]           = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef                    = useRef<HTMLInputElement>(null);
+  const resultsRef                      = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (result) {
+      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    }
+  }, [result]);
 
   async function handleImageScan(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -82,7 +104,6 @@ export default function Home() {
     if (!productUrl.trim()) return;
     setFetchingUrl(true);
     setUrlHint('');
-
     try {
       const res = await fetch('/api/fetch-price', {
         method: 'POST',
@@ -90,12 +111,9 @@ export default function Home() {
         body: JSON.stringify({ url: productUrl.trim() }),
       });
       const data = await res.json();
-
       if (data.error) { setUrlHint(data.error); return; }
-
       if (data.productName) setProductName(data.productName);
       if (data.price != null) setProductPrice(String(data.price));
-
       setUrlHint(
         data.productName || data.price != null
           ? `Got: ${data.productName ?? '?'} — €${data.price ?? '?'}`
@@ -111,11 +129,9 @@ export default function Home() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!productName.trim()) return;
-
     setLoading(true);
     setError('');
     setResult(null);
-
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
@@ -139,400 +155,656 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#1C1C1C]">
+      <div className="max-w-md mx-auto px-4 pb-20">
 
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-[#1C1C1C]/95 backdrop-blur-md border-b border-white/[0.06]">
-        <div className="max-w-lg mx-auto px-5 py-3.5 flex items-center justify-between">
-          <img src="/bunq-logo.svg" alt="bunq" className="h-5 invert" />
-          <span className="text-xs text-gray-500 font-medium tracking-wide">Smart Purchase Assistant</span>
-        </div>
-      </header>
-
-      <div className="max-w-lg mx-auto px-5 pt-10 pb-16 space-y-4">
-
-        {/* Hero */}
-        <div className="pb-4">
-          <h1 className="text-[2.75rem] font-black text-white leading-[1.1] tracking-tight">
+        {/* ── Header ── */}
+        <header className="pt-8 pb-8">
+          <div className="flex items-center gap-2.5 mb-8">
+            <img src="/bunq-logo.svg" alt="bunq" className="h-[18px] invert" />
+            <span className="text-[10px] font-semibold tracking-[0.14em] uppercase text-gray-600 bg-white/[0.04] px-2.5 py-1 rounded-full border border-white/[0.06]">
+              Purchase Advisor
+            </span>
+          </div>
+          <h1 className="text-[2.75rem] font-black text-white leading-[1.0] tracking-tight">
             Should you<br />buy it?
           </h1>
-          <p className="text-gray-400 mt-3 text-[15px] leading-relaxed">
-            Scan a product. See smarter spending advice.
+          <p className="text-gray-500 mt-3 text-[15px]">
+            Scan a product. Get a data-driven decision before you spend.
           </p>
-        </div>
+        </header>
 
-        {/* Input card */}
-        <section className="bg-white rounded-3xl p-5">
+        {/* ── Input card ── */}
+        <section className="bg-[#222222] rounded-3xl border border-white/[0.05] overflow-hidden">
 
           {/* Photo scan */}
-          <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImageScan} className="hidden" />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={scanning}
-            className="w-full mb-4 rounded-2xl border-2 border-dashed border-gray-200 hover:border-[#FF7819] hover:bg-orange-50/50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed overflow-hidden"
-          >
-            {imagePreview ? (
-              <div className="relative">
-                <img src={imagePreview} alt="Product" className="w-full h-36 object-cover" />
-                {scanning && (
-                  <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center gap-2">
-                    <svg className="animate-spin h-6 w-6 text-[#FF7819]" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-[#FF7819]">AI is reading the image…</span>
-                  </div>
-                )}
-                {!scanning && scanHint && (
-                  <div className="absolute bottom-0 inset-x-0 bg-black/60 px-3 py-1.5">
-                    <p className="text-xs text-white">{scanHint}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="py-7 flex flex-col items-center gap-2">
-                <span className="text-3xl">📷</span>
-                <span className="text-sm font-bold text-gray-800">Snap or upload a product photo</span>
-                <span className="text-xs text-gray-400">AI reads the name &amp; price for you</span>
-              </div>
-            )}
-          </button>
-
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs text-gray-400">or enter manually</span>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Field label="Product name" required input={
-              <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)}
-                placeholder="e.g. iPhone 15 Pro, MacBook Air, Dyson V12…" required className="input" />
-            } />
-
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Price (€)" hint="optional" input={
-                <input type="number" value={productPrice} onChange={(e) => setProductPrice(e.target.value)}
-                  placeholder="e.g. 1199" min="1" step="0.01" className="input" />
-              } />
-              <Field label="My budget" hint="optional" input={
+          <div className="p-4">
+            <input
+              ref={fileInputRef} type="file" accept="image/*"
+              capture="environment" onChange={handleImageScan} className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={scanning}
+              className="w-full rounded-2xl border-2 border-dashed border-white/[0.08] hover:border-[#FF7819]/40 hover:bg-[#FF7819]/[0.04] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+            >
+              {imagePreview ? (
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">€</span>
-                  <input type="number" value={userBudget} onChange={(e) => setUserBudget(e.target.value)}
-                    placeholder="max spend" min="1" step="1" className="input pl-7" />
-                </div>
-              } />
-            </div>
-
-            <Field label="Product link" hint="optional" input={
-              <div className="space-y-1.5">
-                <div className="flex gap-2">
-                  <input type="url" value={productUrl} onChange={(e) => { setProductUrl(e.target.value); setUrlHint(''); }}
-                    placeholder="https://..." className="input flex-1" />
-                  {productUrl.trim() && (
-                    <button type="button" onClick={handleFetchFromUrl} disabled={fetchingUrl}
-                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-xl text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
-                      {fetchingUrl ? (
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                        </svg>
-                      ) : '⬇ Fetch'}
-                    </button>
+                  <img src={imagePreview} alt="Scanned product" className="w-full h-40 object-cover" />
+                  {scanning && (
+                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2.5">
+                      <Spinner className="text-[#FF7819]" />
+                      <span className="text-sm font-semibold text-[#FF7819]">Reading image…</span>
+                    </div>
+                  )}
+                  {!scanning && scanHint && (
+                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3">
+                      <p className="text-xs text-white font-medium">{scanHint}</p>
+                    </div>
                   )}
                 </div>
-                {urlHint && (
-                  <p className={`text-xs px-1 ${urlHint.startsWith('Got:') ? 'text-[#FF7819]' : 'text-gray-400'}`}>
-                    {urlHint}
-                  </p>
+              ) : (
+                <div className="py-9 flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-[#FF7819]/10 border border-[#FF7819]/15 flex items-center justify-center">
+                    <CameraIcon className="w-6 h-6 text-[#FF7819]" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-gray-200">Snap a product photo</p>
+                    <p className="text-xs text-gray-600 mt-0.5">AI reads the name &amp; price for you</p>
+                  </div>
+                </div>
+              )}
+            </button>
+            {!imagePreview && scanHint && (
+              <p className="text-xs text-center text-gray-500 mt-2.5 px-2">{scanHint}</p>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 px-4 pb-1">
+            <div className="flex-1 h-px bg-white/[0.05]" />
+            <span className="text-[11px] text-gray-600 font-medium">or type it in</span>
+            <div className="flex-1 h-px bg-white/[0.05]" />
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="p-4 pt-3 space-y-3">
+
+            {/* Product name */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-1.5">
+                Product name <span className="text-[#FF7819] normal-case tracking-normal">*</span>
+              </label>
+              <input
+                type="text" value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                placeholder="iPhone 15 Pro, Dyson V12, Nike Air Max…"
+                required className="input-dark"
+              />
+              <p className="text-[11px] text-gray-700 mt-1.5">
+                Try: iPhone 16 Pro, Samsung Galaxy S24, PlayStation 5
+              </p>
+            </div>
+
+            {/* Price + Budget */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-1.5">
+                  Price <span className="text-gray-700 normal-case tracking-normal font-normal">€ opt.</span>
+                </label>
+                <input
+                  type="number" value={productPrice}
+                  onChange={(e) => setProductPrice(e.target.value)}
+                  placeholder="e.g. 1199" min="1" step="0.01"
+                  className="input-dark"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-1.5">
+                  My budget <span className="text-gray-700 normal-case tracking-normal font-normal">€ opt.</span>
+                </label>
+                <input
+                  type="number" value={userBudget}
+                  onChange={(e) => setUserBudget(e.target.value)}
+                  placeholder="max spend" min="1" step="1"
+                  className="input-dark"
+                />
+              </div>
+            </div>
+
+            {/* Product URL */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-1.5">
+                Product link <span className="text-gray-700 normal-case tracking-normal font-normal">optional</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url" value={productUrl}
+                  onChange={(e) => { setProductUrl(e.target.value); setUrlHint(''); }}
+                  placeholder="https://..." className="input-dark flex-1 min-w-0"
+                />
+                {productUrl.trim() && (
+                  <button
+                    type="button" onClick={handleFetchFromUrl} disabled={fetchingUrl}
+                    className="px-3 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-50 text-gray-300 rounded-xl border border-white/[0.08] transition-colors flex-shrink-0"
+                  >
+                    {fetchingUrl ? <Spinner size="sm" /> : <span className="text-xs font-semibold">Fetch</span>}
+                  </button>
                 )}
               </div>
-            } />
+              {urlHint && (
+                <p className={`text-xs mt-1.5 ${urlHint.startsWith('Got:') ? 'text-[#FF7819]' : 'text-gray-600'}`}>
+                  {urlHint}
+                </p>
+              )}
+            </div>
 
-            <button type="submit" disabled={loading || !productName.trim()}
-              className="w-full bg-[#FF7819] hover:bg-[#e5681a] disabled:bg-gray-200 disabled:cursor-not-allowed text-white disabled:text-gray-400 font-bold py-4 rounded-full text-sm transition-colors">
+            {/* CTA */}
+            <button
+              type="submit"
+              disabled={loading || !productName.trim()}
+              className="w-full mt-1 bg-[#FF7819] hover:bg-[#e5681a] active:scale-[0.98] disabled:bg-white/[0.07] disabled:cursor-not-allowed text-white disabled:text-gray-600 font-bold py-[14px] rounded-full text-sm transition-all duration-150"
+            >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
+                  <Spinner size="sm" />
                   {productPrice ? 'Analyzing…' : 'Finding alternatives…'}
                 </span>
-              ) : productPrice ? 'Analyze Purchase →' : 'Find Alternatives →'}
+              ) : (
+                productPrice ? 'Analyze Purchase →' : 'Find Alternatives →'
+              )}
             </button>
+
           </form>
         </section>
 
+        {/* Error */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-2xl px-5 py-4 text-sm text-red-400">{error}</div>
+          <div className="mt-3 bg-[#E63223]/10 border border-[#E63223]/20 rounded-2xl px-5 py-4 text-sm text-[#E63223] font-medium">
+            {error}
+          </div>
         )}
 
-        {result && <AnalysisResults result={result} />}
+        {/* Results */}
+        {result && (
+          <div ref={resultsRef} className="mt-4 scroll-mt-6 animate-fade-up">
+            <AnalysisResults result={result} />
+          </div>
+        )}
+
       </div>
     </main>
   );
 }
 
-/* ── Sub-components ──────────────────────────────────────────────────── */
+/* ── Helper: financial impact line ──────────────────────────────────── */
 
-function Field({ label, required, hint, input }: {
-  label: string; required?: boolean; hint?: string; input: React.ReactNode;
-}) {
+function getImpact(result: AnalysisResult): { line: JSX.Element | null; sub: string } {
+  const {
+    recommendation, estimatedSavings, savingsPercent, bestAlternative,
+    budgetCheck, priceHistory, productPrice,
+  } = result;
+
+  if (recommendation === 'CHOOSE_ALTERNATIVE' && estimatedSavings > 0) {
+    return {
+      line: <>You can save <span className="text-[#FF7819] font-black">€{estimatedSavings.toLocaleString()}</span> ({savingsPercent}%)</>,
+      sub: `vs. ${bestAlternative?.name ?? 'best alternative'}`,
+    };
+  }
+  if (budgetCheck && !budgetCheck.withinBudget) {
+    return {
+      line: <><span className="text-[#E63223] font-black">€{budgetCheck.overBy.toLocaleString()} over</span> your budget</>,
+      sub: `Your limit: €${budgetCheck.userBudget.toLocaleString()}`,
+    };
+  }
+  if (recommendation === 'WAIT' && priceHistory) {
+    return {
+      line: <><span className="text-[#FF7819] font-black">+{priceHistory.percentVsAvg}%</span> above the 6-month average</>,
+      sub: `Avg €${priceHistory.sixMonthAvg.toLocaleString()} — a better price is likely`,
+    };
+  }
+  if (recommendation === 'BUY' && priceHistory && priceHistory.percentVsAvg < 0) {
+    const saved = Math.abs(Math.round((priceHistory.percentVsAvg / 100) * productPrice));
+    return {
+      line: <>Good timing — <span className="text-[#34CC8D] font-black">€{saved}</span> below the average</>,
+      sub: `6-month avg: €${priceHistory.sixMonthAvg.toLocaleString()}`,
+    };
+  }
+  if (recommendation === 'BUY') {
+    return {
+      line: <>Fairly priced at <span className="text-[#34CC8D] font-black">€{productPrice.toLocaleString()}</span></>,
+      sub: priceHistory ? `6-month avg: €${priceHistory.sixMonthAvg.toLocaleString()}` : '',
+    };
+  }
+  return { line: null, sub: '' };
+}
+
+/* ── Helper: bunq insight copy ───────────────────────────────────────── */
+
+function getBunqInsight(result: AnalysisResult): JSX.Element {
+  const { budgetCheck, estimatedSavings, productPrice, categoryLabel } = result;
+
+  if (budgetCheck && !budgetCheck.withinBudget) {
+    return <>This purchase is <span className="text-[#FF7819] font-bold">€{budgetCheck.overBy.toLocaleString()} over</span> your set budget for this purchase.</>;
+  }
+  if (budgetCheck?.withinBudget) {
+    const spare = budgetCheck.userBudget - productPrice;
+    return <>After this purchase you&apos;ll have <span className="text-[#34CC8D] font-bold">€{spare.toLocaleString()} remaining</span> within your budget.</>;
+  }
+  if (estimatedSavings >= 30) {
+    return <>The cheaper alternative saves <span className="text-[#FF7819] font-bold">€{estimatedSavings.toLocaleString()}</span>, which would add directly to your monthly savings target.</>;
+  }
+  return <>Connect bunq to track your <strong className="text-white font-semibold">{categoryLabel}</strong> spending and see how this purchase fits your monthly goals.</>;
+}
+
+/* ── Vendor comparison card ──────────────────────────────────────────── */
+
+function VendorComparisonCard({ result }: { result: AnalysisResult }) {
+  if (!result.vendors || result.vendors.length === 0) return null;
+
   return (
-    <div>
-      <label className="block text-sm font-semibold text-gray-800 mb-1.5">
-        {label}
-        {required && <span className="text-[#FF7819] ml-0.5">*</span>}
-        {hint && <span className="text-gray-400 font-normal ml-1 text-xs">({hint})</span>}
-      </label>
-      {input}
+    <div className="bg-[#222222] rounded-2xl p-5 border border-white/[0.05]">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+          Where to buy
+        </p>
+        {result.vendorSavings > 0 && (
+          <span className="text-[10px] font-bold text-[#34CC8D] bg-[#34CC8D]/10 px-2 py-0.5 rounded-full">
+            Up to €{result.vendorSavings} difference
+          </span>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        {result.vendors.map((vendor) => {
+          const isCheapest = vendor.name === result.cheapestVendor?.name;
+          return (
+            <div
+              key={vendor.name}
+              className={`flex items-center justify-between py-2.5 px-3 rounded-xl ${
+                isCheapest
+                  ? 'bg-[#34CC8D]/[0.07] border border-[#34CC8D]/20'
+                  : 'border border-transparent'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-white">{vendor.name}</span>
+                {vendor.badge && (
+                  <span className="text-[9px] font-semibold text-gray-600 bg-white/[0.05] px-1.5 py-0.5 rounded-full">
+                    {vendor.badge}
+                  </span>
+                )}
+                {isCheapest && (
+                  <span className="text-[9px] font-bold text-[#34CC8D] uppercase tracking-wide">
+                    Best price
+                  </span>
+                )}
+              </div>
+              <span className={`text-sm font-black tabular-nums ${isCheapest ? 'text-[#34CC8D]' : 'text-white'}`}>
+                €{vendor.price.toLocaleString()}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function AnalysisResults({ result }: { result: AnalysisResult }) {
-  const vcfg = VERDICT_CONFIG[result.recommendation];
+/* ── Ecosystem Alternatives component ───────────────────────────────── */
 
-  return (
-    <div className="space-y-4">
+function EcosystemAlternatives({ result }: { result: AnalysisResult }) {
+  const showEcosystemSplit =
+    result.productEcosystem !== 'generic' &&
+    result.bestSameEcosystemAlternative !== null &&
+    result.bestCrossEcosystemAlternative !== null;
 
-      {/* Verdict hero card */}
-      <div className="bg-[#262626] rounded-3xl p-6">
-        <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-2">Verdict</p>
-        {result.recommendation === 'PRICE_NEEDED' ? (
-          <>
-            <p className="text-3xl font-black text-gray-400 leading-tight">Add a price</p>
-            <p className="text-gray-500 text-sm mt-1">Enter the price above for a BUY / WAIT / SWITCH verdict.</p>
-          </>
-        ) : (
-          <>
-            <p className={`text-5xl font-black ${vcfg.verdictColor} leading-tight`}>{vcfg.verdict}</p>
-            <p className="text-gray-400 text-sm mt-1">{vcfg.label}</p>
-          </>
-        )}
+  if (showEcosystemSplit) {
+    const sameAlt = result.bestSameEcosystemAlternative!;
+    const crossAlt = result.bestCrossEcosystemAlternative!;
+    const isSameRecommended = result.recommendedAlternative?.name === sameAlt.name;
+    const isCrossRecommended = result.recommendedAlternative?.name === crossAlt.name;
+    const sameSavings = Math.max(0, result.productPrice - sameAlt.price);
+    const crossSavings = Math.max(0, result.productPrice - crossAlt.price);
 
-        <div className="mt-5 pt-5 border-t border-white/10 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-white font-bold truncate">{result.productName}</p>
-            <span className="inline-block text-xs text-gray-500 bg-white/5 rounded-full px-2.5 py-0.5 mt-1">
-              {result.categoryLabel}
-            </span>
+    return (
+      <div className="space-y-2.5">
+        {/* Card A: Stay in your ecosystem */}
+        <div className="bg-[#222222] rounded-2xl p-5 border border-white/[0.05]">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+              Stay in your ecosystem
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] font-semibold text-gray-700 uppercase tracking-wider">
+                {sameAlt.brand}
+              </span>
+              {isSameRecommended && (
+                <span className="text-[10px] font-bold text-[#34CC8D] bg-[#34CC8D]/10 px-2 py-0.5 rounded-full">Recommended</span>
+              )}
+            </div>
           </div>
-          {result.priceKnown && result.productPrice > 0 && (
-            <p className="text-2xl font-black text-white flex-shrink-0">€{result.productPrice.toLocaleString()}</p>
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-white font-bold leading-snug">{sameAlt.name}</p>
+              <p className="text-xs text-gray-600 mt-0.5">{sameAlt.reason}</p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-xl font-black text-white">€{sameAlt.price.toLocaleString()}</p>
+              {result.priceKnown && sameSavings > 0 && (
+                <p className="text-xs font-bold text-[#FF7819] mt-0.5">
+                  Save €{sameSavings.toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
+          {isSameRecommended && result.recommendation === 'CHOOSE_ALTERNATIVE' && (
+            <div className="space-y-2.5">
+              {result.recommendedAlternative && result.estimatedSavings > 0 && (
+                <p className="text-xs text-gray-500">
+                  Best option: <span className="text-white font-semibold">{result.recommendedAlternative.name}</span>
+                  {' '}→ Save <span className="text-[#FF7819] font-bold">€{result.estimatedSavings.toLocaleString()}</span>
+                </p>
+              )}
+              <button className="w-full border border-white/[0.08] hover:border-white/20 text-gray-500 hover:text-gray-300 font-semibold py-2.5 rounded-full text-sm transition-colors">
+                Keep original choice
+              </button>
+            </div>
           )}
         </div>
 
-        {result.priceKnown && result.confidence > 0 && (
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-600 bg-white/5 px-3 py-1 rounded-full">
-              {result.confidence}% confidence
-            </span>
-            {result.productUrl && (
-              <a href={result.productUrl} target="_blank" rel="noopener noreferrer"
-                className="text-xs text-[#FF7819] hover:underline">View product →</a>
-            )}
+        {/* Card B: Switch & save more */}
+        <div className="bg-[#222222] rounded-2xl p-5 border border-white/[0.05]">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+              Switch &amp; save more
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] font-semibold text-gray-700 uppercase tracking-wider">
+                {crossAlt.brand}
+              </span>
+              {isCrossRecommended && (
+                <span className="text-[10px] font-bold text-[#34CC8D] bg-[#34CC8D]/10 px-2 py-0.5 rounded-full">Recommended</span>
+              )}
+            </div>
           </div>
-        )}
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-white font-bold leading-snug">{crossAlt.name}</p>
+              <p className="text-xs text-gray-600 mt-0.5">{crossAlt.reason}</p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-xl font-black text-white">€{crossAlt.price.toLocaleString()}</p>
+              {result.priceKnown && crossSavings > 0 && (
+                <p className="text-xs font-bold text-[#FF7819] mt-0.5">
+                  Save €{crossSavings.toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
+          {result.ecosystemNote && (
+            <div className="mt-3 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
+              <p className="text-xs text-amber-400 leading-relaxed">{result.ecosystemNote}</p>
+            </div>
+          )}
+          {isCrossRecommended && result.recommendation === 'CHOOSE_ALTERNATIVE' && (
+            <div className="space-y-2.5 mt-3">
+              {result.recommendedAlternative && result.estimatedSavings > 0 && (
+                <p className="text-xs text-gray-500">
+                  Best option: <span className="text-white font-semibold">{result.recommendedAlternative.name}</span>
+                  {' '}→ Save <span className="text-[#FF7819] font-bold">€{result.estimatedSavings.toLocaleString()}</span>
+                </p>
+              )}
+              <button className="w-full border border-white/[0.08] hover:border-white/20 text-gray-500 hover:text-gray-300 font-semibold py-2.5 rounded-full text-sm transition-colors">
+                Keep original choice
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Single card fallback using recommendedAlternative
+  const alt: Alternative | null = result.recommendedAlternative ?? result.bestAlternative;
+  if (!alt) return null;
+
+  const savings = result.priceKnown ? Math.max(0, result.productPrice - alt.price) : 0;
+
+  return (
+    <div className="bg-[#222222] rounded-2xl p-5 border border-white/[0.05]">
+      <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">
+        Best alternative
+      </p>
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-white font-bold leading-snug">{alt.name}</p>
+          <p className="text-xs text-gray-600 mt-0.5">{alt.reason}</p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="text-xl font-black text-white">€{alt.price.toLocaleString()}</p>
+          {result.priceKnown && savings > 0 && (
+            <p className="text-xs font-bold text-[#FF7819] mt-0.5">
+              Save €{savings.toLocaleString()}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* bunq budget insight */}
-      <div className="bg-[#FF7819]/10 border border-[#FF7819]/20 rounded-3xl p-5">
-        <div className="flex items-center gap-2 mb-2">
-          <img src="/bunq-logo.svg" alt="bunq" className="h-3.5 invert opacity-60" />
-          <p className="text-xs font-bold text-[#FF7819] uppercase tracking-widest">Budget Insight</p>
+      {result.recommendation === 'CHOOSE_ALTERNATIVE' && (
+        <div className="space-y-2.5">
+          {result.recommendedAlternative && result.estimatedSavings > 0 && (
+            <p className="text-xs text-gray-500">
+              Best option: <span className="text-white font-semibold">{result.recommendedAlternative.name}</span>
+              {' '}→ Save <span className="text-[#FF7819] font-bold">€{result.estimatedSavings.toLocaleString()}</span>
+            </p>
+          )}
+          <button className="w-full border border-white/[0.08] hover:border-white/20 text-gray-500 hover:text-gray-300 font-semibold py-2.5 rounded-full text-sm transition-colors">
+            Keep original choice
+          </button>
         </div>
-        <p className="text-white text-sm font-medium leading-relaxed">
-          This purchase is <span className="text-[#FF7819] font-bold">€79 over</span> your monthly shopping budget.
+      )}
+
+      {result.recommendation !== 'CHOOSE_ALTERNATIVE' && result.productUrl && (
+        <a
+          href={result.productUrl} target="_blank" rel="noopener noreferrer"
+          className="flex items-center justify-center w-full bg-[#FF7819] hover:bg-[#e5681a] text-white font-bold py-2.5 rounded-full text-sm transition-colors"
+        >
+          Proceed to buy →
+        </a>
+      )}
+    </div>
+  );
+}
+
+/* ── Fallback card (unknown product) ─────────────────────────────────── */
+
+const DEMO_SUGGESTIONS = ['iPhone 16 Pro', 'Samsung Galaxy S24', 'PlayStation 5'];
+
+function FallbackCard({ productName }: { productName: string }) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-3xl p-6 border bg-white/[0.03] border-white/[0.08]">
+        <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2.5">
+          Limited data
         </p>
-        <p className="text-gray-500 text-xs mt-1.5">Based on your bunq spending patterns for this category.</p>
+        <p className="text-2xl font-black text-gray-400 leading-tight">
+          Limited data available
+        </p>
+        <p className="text-gray-600 text-sm mt-2 leading-relaxed">
+          We couldn&apos;t find reliable pricing or alternatives for &ldquo;{productName}&rdquo;. Try adding a price or use one of the demo products below.
+        </p>
       </div>
+      <div className="bg-[#222222] rounded-2xl p-5 border border-white/[0.05]">
+        <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">
+          Demo products
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {DEMO_SUGGESTIONS.map((s) => (
+            <span
+              key={s}
+              className="text-xs font-semibold text-gray-400 bg-white/[0.05] px-3 py-1.5 rounded-full border border-white/[0.06]"
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {/* Budget check */}
-      {result.budgetCheck && <BudgetCheckCard check={result.budgetCheck} productPrice={result.productPrice} />}
+/* ── Result component ────────────────────────────────────────────────── */
 
-      {/* Retailers */}
-      {result.retailers.length > 0 && <RetailerCard retailers={result.retailers} productPrice={result.productPrice} />}
+function AnalysisResults({ result }: { result: AnalysisResult }) {
+  if (result.fallback) {
+    return <FallbackCard productName={result.productName} />;
+  }
 
-      {/* Price history */}
-      {result.priceHistory && (
-        <PriceHistoryCard history={result.priceHistory} currentPrice={result.productPrice} />
-      )}
+  const vcfg = VERDICT[result.recommendation];
 
-      {/* Alternatives */}
-      {result.alternatives.length > 0 && (
-        <div className="bg-[#262626] rounded-3xl p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Similar Alternatives</h3>
-          <div className="divide-y divide-white/5">
-            {result.alternatives.map((alt, i) => (
-              <div key={i} className="flex items-start justify-between py-3.5 gap-4 first:pt-0 last:pb-0">
+  /* PRICE_NEEDED — minimal state, show alt */
+  if (result.recommendation === 'PRICE_NEEDED') {
+    const hasSplit =
+      result.productEcosystem !== 'generic' &&
+      result.bestSameEcosystemAlternative !== null &&
+      result.bestCrossEcosystemAlternative !== null;
+
+    return (
+      <div className="space-y-3">
+        <div className={`rounded-3xl p-6 border ${vcfg.bgClass} ${vcfg.borderClass}`}>
+          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2.5">
+            Awaiting price
+          </p>
+          <p className="text-3xl font-black text-gray-400 leading-tight">Price needed</p>
+          <p className="text-gray-600 text-sm mt-2">
+            Enter the price above for a BUY / WAIT / SWITCH verdict.
+          </p>
+          <p className="text-xs text-gray-700 font-medium mt-1.5 truncate">
+            {result.productName} · {result.categoryLabel}
+          </p>
+        </div>
+
+        {result.vendors && result.vendors.length > 0 && (
+          <VendorComparisonCard result={result} />
+        )}
+
+        {hasSplit ? (
+          <div className="space-y-2.5">
+            {/* Same eco */}
+            <div className="bg-[#222222] rounded-2xl p-5 border border-white/[0.05]">
+              <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">
+                Stay in your ecosystem
+              </p>
+              <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-white">{alt.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{alt.reason}</p>
-                  {alt.url && (
-                    <a href={alt.url} target="_blank" rel="noopener noreferrer" className="text-[#FF7819] text-xs hover:underline">
-                      View →
-                    </a>
-                  )}
+                  <p className="text-white font-bold">{result.bestSameEcosystemAlternative!.name}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">{result.bestSameEcosystemAlternative!.reason}</p>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="font-bold text-white">€{alt.price.toLocaleString()}</p>
-                  {result.priceKnown && alt.price < result.productPrice && (
-                    <p className="text-xs font-semibold text-[#FF7819]">
-                      Save €{(result.productPrice - alt.price).toLocaleString()}
-                    </p>
-                  )}
-                </div>
+                <p className="text-xl font-black text-[#FF7819] flex-shrink-0">
+                  €{result.bestSameEcosystemAlternative!.price.toLocaleString()}
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Best saving — orange hero */}
-      {result.priceKnown && result.estimatedSavings > 0 && (
-        <div className="bg-[#FF7819] rounded-3xl p-6 flex items-center justify-between">
-          <div>
-            <p className="text-white/80 text-sm font-semibold">Best saving</p>
-            <p className="text-white/60 text-xs mt-0.5">vs. {result.bestAlternative?.name}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-4xl font-black text-white">€{result.estimatedSavings.toLocaleString()}</p>
-            <p className="text-white/70 text-xs">{result.savingsPercent}% less</p>
-          </div>
-        </div>
-      )}
-
-      {/* AI explanation */}
-      {result.priceKnown && (
-        <div className="bg-[#262626] rounded-3xl p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Why this verdict?</h3>
-          <p className="text-sm text-gray-300 leading-relaxed">{result.explanation}</p>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-function BudgetCheckCard({ check, productPrice }: { check: BudgetCheck; productPrice: number }) {
-  return (
-    <div className={`rounded-3xl p-5 ${check.withinBudget ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Budget Check</h3>
-      <div className="flex items-start justify-between mb-3">
-        <div className="space-y-1 text-sm">
-          <div className="flex gap-2">
-            <span className="text-gray-500">Your limit:</span>
-            <span className="font-semibold text-white">€{check.userBudget.toLocaleString()}</span>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-gray-500">Product:</span>
-            <span className="font-semibold text-white">€{productPrice.toLocaleString()}</span>
-          </div>
-        </div>
-        <div className={`text-right font-bold ${check.withinBudget ? 'text-green-400' : 'text-red-400'}`}>
-          {check.withinBudget
-            ? <><span className="text-lg">✓ Within budget</span><br /><span className="text-sm font-normal text-green-500">€{(check.userBudget - productPrice).toLocaleString()} to spare</span></>
-            : <><span className="text-lg">€{check.overBy.toLocaleString()} over</span><br /><span className="text-sm font-normal text-red-400/70">exceeds limit</span></>
-          }
-        </div>
-      </div>
-      {!check.withinBudget && check.bestOptionInBudget && (
-        <div className="bg-white/5 rounded-2xl px-4 py-2.5 text-sm">
-          <span className="text-gray-400">Best in-budget: </span>
-          <span className="font-semibold text-white">{check.bestOptionInBudget.name}</span>
-          <span className="text-[#FF7819] font-semibold ml-2">€{check.bestOptionInBudget.price.toLocaleString()}</span>
-        </div>
-      )}
-      {!check.withinBudget && !check.canAffordAnyAlternative && (
-        <p className="text-xs text-red-400/70 mt-2">No alternatives within €{check.userBudget.toLocaleString()}</p>
-      )}
-    </div>
-  );
-}
-
-function RetailerCard({ retailers, productPrice }: { retailers: RetailerPrice[]; productPrice: number }) {
-  return (
-    <div className="bg-[#262626] rounded-3xl p-5">
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Where to Buy</h3>
-      <div className="space-y-2">
-        {retailers.map((r, i) => (
-          <div key={i} className={`flex items-center justify-between py-2.5 px-4 rounded-2xl ${i === 0 ? 'bg-[#FF7819]/10 border border-[#FF7819]/20' : 'bg-white/5'}`}>
-            <div className="flex items-center gap-2 min-w-0">
-              {i === 0 && (
-                <span className="text-xs font-bold text-[#FF7819] bg-[#FF7819]/10 px-2 py-0.5 rounded-full flex-shrink-0">
-                  Lowest
-                </span>
-              )}
-              <span className="text-sm font-medium text-white truncate">{r.retailer}</span>
-              {r.badge && <span className="text-xs text-gray-600 flex-shrink-0 hidden sm:inline">{r.badge}</span>}
-              {!r.inStock && <span className="text-xs text-red-400 flex-shrink-0">Out of stock</span>}
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              {r.savings > 0 && (
-                <span className="text-xs font-semibold text-[#FF7819] hidden sm:inline">Save €{r.savings}</span>
-              )}
-              {r.url
-                ? <a href={r.url} target="_blank" rel="noopener noreferrer"
-                    className={`font-bold hover:underline ${i === 0 ? 'text-[#FF7819]' : 'text-white'}`}>
-                    €{r.price.toLocaleString()}
-                  </a>
-                : <span className={`font-bold ${i === 0 ? 'text-[#FF7819]' : 'text-white'}`}>€{r.price.toLocaleString()}</span>
-              }
+            {/* Cross eco */}
+            <div className="bg-[#222222] rounded-2xl p-5 border border-white/[0.05]">
+              <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">
+                Switch &amp; save more
+              </p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-white font-bold">{result.bestCrossEcosystemAlternative!.name}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">{result.bestCrossEcosystemAlternative!.reason}</p>
+                </div>
+                <p className="text-xl font-black text-[#FF7819] flex-shrink-0">
+                  €{result.bestCrossEcosystemAlternative!.price.toLocaleString()}
+                </p>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-      {retailers[0]?.savings > 0 && (
-        <p className="text-xs text-gray-600 mt-3 text-right">vs. your found price (€{productPrice.toLocaleString()})</p>
-      )}
-    </div>
-  );
-}
+        ) : result.recommendedAlternative ? (
+          <div className="bg-[#222222] rounded-2xl p-5 border border-white/[0.05]">
+            <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">
+              Best alternative found
+            </p>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-white font-bold">{result.recommendedAlternative.name}</p>
+                <p className="text-xs text-gray-600 mt-0.5">{result.recommendedAlternative.reason}</p>
+              </div>
+              <p className="text-xl font-black text-[#FF7819] flex-shrink-0">
+                €{result.recommendedAlternative.price.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        ) : null}
 
-function PriceHistoryCard({ history, currentPrice }: { history: PriceHistory; currentPrice: number }) {
-  const statusCfg = PRICE_STATUS_CONFIG[history.priceStatus];
-  const low  = history.thirtyDayLow;
-  const high = history.thirtyDayHigh;
-  const range = Math.max(high - low, 1);
-  const markerPos = Math.max(4, Math.min(96, ((currentPrice - low) / range) * 100));
+        <div className="bg-[#FF7819]/10 border border-[#FF7819]/[0.15] rounded-2xl p-5">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <span className="text-[11px] font-black text-[#FF7819]">bunq</span>
+            <span className="text-[9px] font-bold text-[#FF7819]/60 uppercase tracking-widest">Insight</span>
+          </div>
+          <p className="text-white text-sm font-medium leading-relaxed">
+            Connect bunq to track your <strong className="text-white font-semibold">{result.categoryLabel}</strong> spending and see how this purchase fits your monthly goals.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /* Full result */
+  const { line: impactLine, sub: impactSub } = getImpact(result);
 
   return (
-    <div className="bg-[#262626] rounded-3xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Price History</h3>
-        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${statusCfg.bg} ${statusCfg.text}`}>
-          {statusCfg.label}
-        </span>
+    <div className="space-y-3">
+
+      {/* 1 ── Verdict */}
+      <div className={`rounded-3xl p-6 border ${vcfg.bgClass} ${vcfg.borderClass}`}>
+        <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">
+          Decision
+        </p>
+        <div className="flex items-start justify-between gap-3">
+          <p className={`text-[2.1rem] font-black leading-tight ${vcfg.textClass}`}>
+            {vcfg.label}
+          </p>
+          {result.priceKnown && (
+            <p className="text-2xl font-black text-white flex-shrink-0 mt-1">
+              €{result.productPrice.toLocaleString()}
+            </p>
+          )}
+        </div>
+        <p className="text-sm text-gray-500 mt-2 font-medium truncate">
+          {result.productName} <span className="text-gray-700">·</span> {result.categoryLabel}
+        </p>
       </div>
 
-      <div className="mb-4">
-        <div className="flex justify-between text-xs text-gray-600 mb-2">
-          <span>30-day range</span>
-          <span>{history.percentVsAvg > 0 ? '+' : ''}{history.percentVsAvg}% vs 6-month avg</span>
+      {/* 2 ── Financial impact */}
+      {result.priceKnown && impactLine && (
+        <div className="bg-[#222222] rounded-2xl px-5 py-4 border border-white/[0.05]">
+          <p className="text-[17px] font-bold text-white leading-snug">{impactLine}</p>
+          {impactSub && <p className="text-xs text-gray-600 mt-1.5">{impactSub}</p>}
         </div>
-        <div className="relative h-2 bg-white/10 rounded-full">
-          <div
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-[#FF7819] rounded-full border-2 border-[#262626] shadow-sm z-10"
-            style={{ left: `${markerPos}%` }}
-          />
-        </div>
-        <div className="flex justify-between mt-3 text-xs font-semibold">
-          <span className="text-green-400">€{low.toLocaleString()} <span className="font-normal text-gray-600">low</span></span>
-          <span className="text-white">€{currentPrice.toLocaleString()} <span className="font-normal text-gray-600">now</span></span>
-          <span className="text-red-400">€{high.toLocaleString()} <span className="font-normal text-gray-600">high</span></span>
-        </div>
-      </div>
-
-      <div className="flex gap-4 text-xs text-gray-600 border-t border-white/5 pt-3">
-        <span>6-month avg: <strong className="text-gray-300">€{history.sixMonthAvg.toLocaleString()}</strong></span>
-        <span>All-time low: <strong className="text-gray-300">€{history.allTimeLow.toLocaleString()}</strong></span>
-      </div>
-
-      {history.isSeasonalHigh && (
-        <p className="mt-2 text-xs text-amber-400 font-medium">📅 Prices typically elevated Nov–Feb</p>
       )}
+
+      {/* 3 ── Vendor comparison */}
+      <VendorComparisonCard result={result} />
+
+      {/* 4 ── Ecosystem alternatives */}
+      <EcosystemAlternatives result={result} />
+
+      {/* 5 ── bunq insight */}
+      <div className="bg-[#FF7819]/10 border border-[#FF7819]/[0.15] rounded-2xl p-5">
+        <div className="flex items-center gap-1.5 mb-2.5">
+          <span className="text-[11px] font-black text-[#FF7819]">bunq</span>
+          <span className="text-[9px] font-bold text-[#FF7819]/60 uppercase tracking-widest">Insight</span>
+        </div>
+        <p className="text-white text-sm font-medium leading-relaxed">{getBunqInsight(result)}</p>
+      </div>
+
+      {/* 6 ── Short explanation */}
+      {result.explanation && (
+        <p className="text-[13px] text-gray-500 leading-relaxed px-1 pb-2">{result.explanation}</p>
+      )}
+
     </div>
   );
 }

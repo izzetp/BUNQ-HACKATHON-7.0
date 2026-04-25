@@ -3,6 +3,15 @@ export interface Alternative {
   price: number;
   reason: string;
   url?: string;
+  brand: string;
+  ecosystem: string;
+}
+
+export interface VendorPrice {
+  name: string;
+  price: number;
+  url?: string;
+  badge?: string;
 }
 
 export interface RetailerPrice {
@@ -28,6 +37,9 @@ export interface ProductEntry {
   keywords: string[];
   category: keyof typeof mockSpendingData.categories;
   alternatives: Alternative[];
+  brand: string;
+  ecosystem: string;
+  vendors: VendorPrice[];
 }
 
 export const mockSpendingData = {
@@ -51,138 +63,296 @@ export const productDatabase: ProductEntry[] = [
   {
     keywords: ["iphone", "apple phone", "iphone 15", "iphone 14", "iphone 16"],
     category: "electronics",
+    brand: "Apple",
+    ecosystem: "apple",
     alternatives: [
-      { name: "Samsung Galaxy S24", price: 799, reason: "Similar flagship performance, better value" },
-      { name: "Google Pixel 8a", price: 499, reason: "Clean Android, excellent camera" },
-      { name: "OnePlus 12", price: 699, reason: "Top-tier specs at lower price" },
+      { name: "iPhone SE 4th Gen", price: 529, reason: "Full Apple experience at a much lower price", brand: "Apple", ecosystem: "apple" },
+      { name: "Google Pixel 9a", price: 499, reason: "Clean Android, excellent camera system", brand: "Google", ecosystem: "android" },
+      { name: "Samsung Galaxy S24", price: 799, reason: "Premium Android, vibrant display", brand: "Samsung", ecosystem: "android" },
+    ],
+    vendors: [
+      { name: "Apple Store", price: 1199, url: "https://apple.com/nl", badge: "Official" },
+      { name: "Coolblue", price: 1149, url: "https://coolblue.nl", badge: "Same-day delivery" },
+      { name: "MediaMarkt", price: 1159, url: "https://mediamarkt.nl" },
+      { name: "Bol.com", price: 1119, url: "https://bol.com", badge: "Free shipping" },
     ],
   },
   {
     keywords: ["macbook", "macbook pro", "macbook air", "apple laptop"],
     category: "electronics",
+    brand: "Apple",
+    ecosystem: "apple",
     alternatives: [
-      { name: "Dell XPS 13", price: 999, reason: "Premium build, great display" },
-      { name: "ASUS ZenBook 14", price: 849, reason: "Lightweight, solid performance" },
-      { name: "Lenovo ThinkPad X1 Carbon", price: 1099, reason: "Business-grade durability" },
+      { name: "MacBook Air M1 (Refurb)", price: 849, reason: "Same Apple chip quality, officially refurbished", brand: "Apple", ecosystem: "apple" },
+      { name: "Dell XPS 13", price: 999, reason: "Premium Windows build, comparable performance", brand: "Dell", ecosystem: "windows" },
+      { name: "ASUS ZenBook 14", price: 849, reason: "Lightweight Windows laptop, great value", brand: "ASUS", ecosystem: "windows" },
+    ],
+    vendors: [
+      { name: "Apple Store", price: 1499, url: "https://apple.com/nl", badge: "Official" },
+      { name: "Coolblue", price: 1449, url: "https://coolblue.nl", badge: "Same-day delivery" },
+      { name: "MediaMarkt", price: 1469, url: "https://mediamarkt.nl" },
+      { name: "Bol.com", price: 1399, url: "https://bol.com", badge: "Free shipping" },
     ],
   },
   {
     keywords: ["airpods", "airpods pro", "apple earbuds"],
     category: "electronics",
+    brand: "Apple",
+    ecosystem: "apple",
     alternatives: [
-      { name: "Sony WF-1000XM5", price: 199, reason: "Industry-best noise cancellation" },
-      { name: "Samsung Galaxy Buds2 Pro", price: 149, reason: "Great sound, comfortable fit" },
-      { name: "Anker Soundcore Liberty 4", price: 99, reason: "Budget-friendly ANC earbuds" },
+      { name: "Beats Studio Buds+", price: 149, reason: "Apple-owned, seamless iPhone pairing", brand: "Apple", ecosystem: "apple" },
+      { name: "Sony WF-1000XM5", price: 199, reason: "Best-in-class noise cancellation", brand: "Sony", ecosystem: "sony-audio" },
+      { name: "Samsung Galaxy Buds3", price: 149, reason: "Great sound, works with any device", brand: "Samsung", ecosystem: "android" },
+    ],
+    vendors: [
+      { name: "Apple Store", price: 279, url: "https://apple.com/nl", badge: "Official" },
+      { name: "Coolblue", price: 269, url: "https://coolblue.nl" },
+      { name: "MediaMarkt", price: 265, url: "https://mediamarkt.nl" },
+      { name: "Bol.com", price: 259, url: "https://bol.com", badge: "Free shipping" },
+      { name: "Amazon.nl", price: 249, url: "https://amazon.nl", badge: "Prime" },
     ],
   },
   {
     keywords: ["headphones", "over-ear headphones", "wireless headphones"],
     category: "electronics",
+    brand: "Various",
+    ecosystem: "generic",
     alternatives: [
-      { name: "Sony WH-1000XM5", price: 279, reason: "Best-in-class ANC" },
-      { name: "Jabra Evolve2 55", price: 249, reason: "Great for calls and music" },
-      { name: "Anker Soundcore Q45", price: 79, reason: "Solid budget option with ANC" },
+      { name: "Sony WH-1000XM5", price: 279, reason: "Best-in-class ANC, industry standard", brand: "Sony", ecosystem: "sony-audio" },
+      { name: "Jabra Evolve2 55", price: 249, reason: "Great for calls and focused work", brand: "Jabra", ecosystem: "generic" },
+      { name: "Anker Soundcore Q45", price: 79, reason: "Solid ANC at a budget price", brand: "Anker", ecosystem: "generic" },
+    ],
+    vendors: [
+      { name: "Coolblue", price: 350, url: "https://coolblue.nl" },
+      { name: "MediaMarkt", price: 339, url: "https://mediamarkt.nl" },
+      { name: "Bol.com", price: 329, url: "https://bol.com", badge: "Free shipping" },
+      { name: "Amazon.nl", price: 309, url: "https://amazon.nl", badge: "Prime" },
     ],
   },
   {
     keywords: ["ipad", "apple tablet", "ipad pro", "ipad air"],
     category: "electronics",
+    brand: "Apple",
+    ecosystem: "apple",
     alternatives: [
-      { name: "Samsung Galaxy Tab S9 FE", price: 449, reason: "Great display, versatile" },
-      { name: "Lenovo Tab P12", price: 349, reason: "Large screen at lower cost" },
-      { name: "Amazon Fire HD 10", price: 149, reason: "Great for media consumption" },
+      { name: "iPad mini 6", price: 499, reason: "Compact Apple tablet, same iOS ecosystem", brand: "Apple", ecosystem: "apple" },
+      { name: "Samsung Galaxy Tab S9 FE", price: 449, reason: "Versatile Android tablet, great display", brand: "Samsung", ecosystem: "android" },
+      { name: "Amazon Fire HD 10", price: 149, reason: "Budget media tablet, good for streaming", brand: "Amazon", ecosystem: "generic" },
+    ],
+    vendors: [
+      { name: "Apple Store", price: 749, url: "https://apple.com/nl", badge: "Official" },
+      { name: "Coolblue", price: 719, url: "https://coolblue.nl", badge: "Same-day delivery" },
+      { name: "MediaMarkt", price: 729, url: "https://mediamarkt.nl" },
+      { name: "Bol.com", price: 699, url: "https://bol.com", badge: "Free shipping" },
+    ],
+  },
+  {
+    keywords: ["samsung galaxy", "galaxy s24", "galaxy s25", "galaxy s23", "galaxy phone", "samsung phone"],
+    category: "electronics",
+    brand: "Samsung",
+    ecosystem: "android",
+    alternatives: [
+      { name: "Samsung Galaxy A55", price: 449, reason: "Solid Samsung mid-ranger, same ecosystem", brand: "Samsung", ecosystem: "android" },
+      { name: "Google Pixel 8a", price: 499, reason: "Clean Android, excellent camera for less", brand: "Google", ecosystem: "android" },
+      { name: "iPhone 15", price: 799, reason: "Premium Apple experience, tighter ecosystem integration", brand: "Apple", ecosystem: "apple" },
+    ],
+    vendors: [
+      { name: "Samsung Store", price: 899, url: "https://samsung.com/nl", badge: "Official" },
+      { name: "Coolblue", price: 869, url: "https://coolblue.nl" },
+      { name: "MediaMarkt", price: 879, url: "https://mediamarkt.nl" },
+      { name: "Bol.com", price: 849, url: "https://bol.com", badge: "Free shipping" },
     ],
   },
   {
     keywords: ["samsung tv", "lg tv", "sony tv", "4k tv", "television", "smart tv", "oled"],
     category: "electronics",
+    brand: "Various",
+    ecosystem: "generic",
     alternatives: [
-      { name: "Hisense U6 Series 55\"", price: 399, reason: "Excellent picture for the price" },
-      { name: "TCL 5-Series 55\"", price: 449, reason: "Roku built-in, great value" },
-      { name: "Vizio V-Series 55\"", price: 329, reason: "Budget 4K with solid performance" },
+      { name: "Hisense U6 Series 55\"", price: 399, reason: "Excellent picture quality for the price", brand: "Hisense", ecosystem: "generic" },
+      { name: "TCL 5-Series 55\"", price: 449, reason: "Roku built-in, great all-round value", brand: "TCL", ecosystem: "generic" },
+      { name: "Vizio V-Series 55\"", price: 329, reason: "Budget 4K with solid performance", brand: "Vizio", ecosystem: "generic" },
+    ],
+    vendors: [
+      { name: "MediaMarkt", price: 599, url: "https://mediamarkt.nl" },
+      { name: "Coolblue", price: 569, url: "https://coolblue.nl", badge: "Same-day delivery" },
+      { name: "Bol.com", price: 549, url: "https://bol.com", badge: "Free shipping" },
+      { name: "Alternate", price: 529, url: "https://alternate.nl" },
     ],
   },
   {
     keywords: ["ps5", "playstation 5", "playstation"],
     category: "entertainment",
+    brand: "Sony",
+    ecosystem: "playstation",
     alternatives: [
-      { name: "Xbox Series S", price: 299, reason: "Game Pass library, all-digital" },
-      { name: "Nintendo Switch OLED", price: 349, reason: "Portable + TV, unique library" },
-      { name: "Steam Deck OLED", price: 549, reason: "PC gaming on the go" },
+      { name: "PS5 Digital Edition", price: 449, reason: "Same PlayStation library, no disc drive needed", brand: "Sony", ecosystem: "playstation" },
+      { name: "Xbox Series S", price: 299, reason: "Game Pass library, all-digital, very affordable", brand: "Microsoft", ecosystem: "xbox" },
+      { name: "Nintendo Switch OLED", price: 349, reason: "Portable gaming, unique exclusive library", brand: "Nintendo", ecosystem: "nintendo" },
+    ],
+    vendors: [
+      { name: "PlayStation Direct", price: 549, url: "https://direct.playstation.com", badge: "Official" },
+      { name: "MediaMarkt", price: 529, url: "https://mediamarkt.nl" },
+      { name: "GameMania", price: 539, url: "https://gamemania.nl" },
+      { name: "Bol.com", price: 519, url: "https://bol.com", badge: "Free shipping" },
     ],
   },
   {
     keywords: ["xbox", "xbox series x", "xbox series s"],
     category: "entertainment",
+    brand: "Microsoft",
+    ecosystem: "xbox",
     alternatives: [
-      { name: "Nintendo Switch OLED", price: 349, reason: "Different experience, great exclusives" },
-      { name: "Steam Deck OLED", price: 549, reason: "Access to full PC library" },
+      { name: "Xbox Series S", price: 299, reason: "Entry-level Xbox with full Game Pass access", brand: "Microsoft", ecosystem: "xbox" },
+      { name: "PlayStation 5 Slim", price: 449, reason: "Stronger exclusive library, great performance", brand: "Sony", ecosystem: "playstation" },
+      { name: "Nintendo Switch OLED", price: 349, reason: "Portable gaming, very different experience", brand: "Nintendo", ecosystem: "nintendo" },
+    ],
+    vendors: [
+      { name: "Microsoft Store", price: 499, url: "https://microsoft.com/nl", badge: "Official" },
+      { name: "MediaMarkt", price: 479, url: "https://mediamarkt.nl" },
+      { name: "GameMania", price: 489, url: "https://gamemania.nl" },
+      { name: "Bol.com", price: 469, url: "https://bol.com", badge: "Free shipping" },
     ],
   },
   {
     keywords: ["nike", "nike shoes", "air max", "nike sneakers", "air force"],
     category: "clothing",
+    brand: "Nike",
+    ecosystem: "nike",
     alternatives: [
-      { name: "Adidas Ultraboost 23", price: 149, reason: "Excellent cushioning, comparable comfort" },
-      { name: "New Balance 574", price: 89, reason: "Classic style, great value" },
-      { name: "ASICS Gel-Kayano 30", price: 119, reason: "Superior support for runners" },
+      { name: "Nike Revolution 7", price: 69, reason: "Nike quality and fit at an entry-level price", brand: "Nike", ecosystem: "nike" },
+      { name: "Adidas Ultraboost 23", price: 149, reason: "Boost cushioning, premium everyday feel", brand: "Adidas", ecosystem: "adidas" },
+      { name: "New Balance 574", price: 89, reason: "Classic comfort, great everyday value", brand: "New Balance", ecosystem: "generic" },
+    ],
+    vendors: [
+      { name: "Nike.com", price: 149, url: "https://nike.com/nl", badge: "Official" },
+      { name: "Foot Locker", price: 139, url: "https://footlocker.nl" },
+      { name: "Bol.com", price: 135, url: "https://bol.com" },
+      { name: "Zalando", price: 129, url: "https://zalando.nl", badge: "Free returns" },
     ],
   },
   {
     keywords: ["adidas", "yeezy", "stan smith", "adidas shoes"],
     category: "clothing",
+    brand: "Adidas",
+    ecosystem: "adidas",
     alternatives: [
-      { name: "Nike Air Max 270", price: 129, reason: "Bold style, great comfort" },
-      { name: "Puma RS-X", price: 89, reason: "Retro look at a lower price" },
-      { name: "Reebok Classic Leather", price: 74, reason: "Timeless, affordable style" },
+      { name: "Adidas Lite Racer 3.0", price: 49, reason: "Lightweight everyday Adidas at budget price", brand: "Adidas", ecosystem: "adidas" },
+      { name: "Nike Air Max 270", price: 129, reason: "Bold Air cushioning, different feel and style", brand: "Nike", ecosystem: "nike" },
+      { name: "Puma RS-X", price: 89, reason: "Retro look, comfortable daily wear", brand: "Puma", ecosystem: "generic" },
+    ],
+    vendors: [
+      { name: "Adidas.com", price: 129, url: "https://adidas.com/nl", badge: "Official" },
+      { name: "Bol.com", price: 115, url: "https://bol.com" },
+      { name: "Zalando", price: 109, url: "https://zalando.nl", badge: "Free returns" },
+      { name: "ASOS", price: 99, url: "https://asos.com", badge: "Student discount" },
     ],
   },
   {
     keywords: ["north face", "jacket", "winter jacket", "puffer jacket", "down jacket"],
     category: "clothing",
+    brand: "The North Face",
+    ecosystem: "north-face",
     alternatives: [
-      { name: "Columbia Powder Lite Jacket", price: 99, reason: "Warm, lightweight, affordable" },
-      { name: "Marmot PreCip Eco Jacket", price: 109, reason: "Waterproof, packable design" },
-      { name: "Patagonia Nano Puff", price: 179, reason: "Premium insulation, lighter weight" },
+      { name: "The North Face Resolve Jacket", price: 99, reason: "Same brand, lightweight waterproof option", brand: "The North Face", ecosystem: "north-face" },
+      { name: "Columbia Powder Lite Jacket", price: 99, reason: "Warm, lightweight, reliable waterproofing", brand: "Columbia", ecosystem: "generic" },
+      { name: "Patagonia Nano Puff", price: 179, reason: "Premium recycled insulation, lighter weight", brand: "Patagonia", ecosystem: "generic" },
+    ],
+    vendors: [
+      { name: "The North Face", price: 249, url: "https://thenorthface.com/nl", badge: "Official" },
+      { name: "Bol.com", price: 229, url: "https://bol.com" },
+      { name: "Zalando", price: 219, url: "https://zalando.nl", badge: "Free returns" },
+      { name: "About You", price: 209, url: "https://aboutyou.nl" },
     ],
   },
   {
     keywords: ["nespresso", "coffee machine", "espresso machine", "coffee maker"],
     category: "home",
+    brand: "Nespresso",
+    ecosystem: "nespresso",
     alternatives: [
-      { name: "De'Longhi Stilosa EC230", price: 69, reason: "Manual espresso, great starter" },
-      { name: "Keurig K-Slim", price: 89, reason: "Convenient pod system" },
-      { name: "Moka Pot + Grinder", price: 45, reason: "Authentic espresso, no pods needed" },
+      { name: "Nespresso Essenza Mini", price: 79, reason: "Entry-level Nespresso, same pods compatible", brand: "Nespresso", ecosystem: "nespresso" },
+      { name: "De'Longhi Stilosa EC230", price: 69, reason: "Manual espresso, no pod lock-in", brand: "De'Longhi", ecosystem: "generic" },
+      { name: "Moka Pot + Grinder Bundle", price: 45, reason: "Authentic espresso, minimal ongoing cost", brand: "Generic", ecosystem: "generic" },
+    ],
+    vendors: [
+      { name: "Nespresso Store", price: 149, url: "https://nespresso.com/nl", badge: "Official" },
+      { name: "MediaMarkt", price: 139, url: "https://mediamarkt.nl" },
+      { name: "Coolblue", price: 129, url: "https://coolblue.nl" },
+      { name: "Bol.com", price: 119, url: "https://bol.com", badge: "Free shipping" },
     ],
   },
   {
     keywords: ["dyson", "vacuum", "dyson vacuum", "robot vacuum"],
     category: "home",
+    brand: "Dyson",
+    ecosystem: "dyson",
     alternatives: [
-      { name: "Shark IZ462H", price: 199, reason: "Comparable suction, much cheaper" },
-      { name: "Eufy RoboVac 11S", price: 149, reason: "Reliable robot vacuum at low price" },
-      { name: "Bissell CrossWave", price: 179, reason: "Vacuums and mops simultaneously" },
+      { name: "Dyson V8 Absolute", price: 299, reason: "Previous-gen Dyson, same quality at lower price", brand: "Dyson", ecosystem: "dyson" },
+      { name: "Shark IZ462H", price: 199, reason: "Comparable suction, significantly cheaper", brand: "Shark", ecosystem: "generic" },
+      { name: "Eufy RoboVac 11S", price: 149, reason: "Hands-free robot vacuum at low cost", brand: "Eufy", ecosystem: "generic" },
+    ],
+    vendors: [
+      { name: "Dyson Store", price: 499, url: "https://dyson.nl", badge: "Official" },
+      { name: "MediaMarkt", price: 479, url: "https://mediamarkt.nl" },
+      { name: "Coolblue", price: 469, url: "https://coolblue.nl" },
+      { name: "Bol.com", price: 449, url: "https://bol.com", badge: "Free shipping" },
     ],
   },
   {
     keywords: ["gym", "gym membership", "fitness membership", "crossfit"],
     category: "sports",
+    brand: "Various",
+    ecosystem: "generic",
     alternatives: [
-      { name: "Planet Fitness Membership", price: 10, reason: "Basic gym at minimal cost/month" },
-      { name: "Resistance Bands Set", price: 29, reason: "Home workout, one-time purchase" },
-      { name: "YouTube + Free Weights", price: 49, reason: "Dumbbells + free workout content" },
+      { name: "Planet Fitness Membership", price: 10, reason: "Basic gym at minimal cost per month", brand: "Planet Fitness", ecosystem: "generic" },
+      { name: "Resistance Bands Set", price: 29, reason: "Home workout, one-time purchase", brand: "Generic", ecosystem: "generic" },
+      { name: "YouTube + Free Weights", price: 49, reason: "Dumbbells + free workout content online", brand: "Generic", ecosystem: "generic" },
     ],
+    vendors: [],
   },
   {
     keywords: ["laptop", "notebook", "computer", "pc"],
     category: "electronics",
+    brand: "Various",
+    ecosystem: "windows",
     alternatives: [
-      { name: "Acer Aspire 5", price: 549, reason: "Great budget laptop for daily tasks" },
-      { name: "HP Pavilion 15", price: 629, reason: "Solid all-rounder" },
-      { name: "Lenovo IdeaPad 5", price: 679, reason: "Good build quality, AMD performance" },
+      { name: "Acer Aspire 5", price: 549, reason: "Great budget laptop for daily tasks", brand: "Acer", ecosystem: "windows" },
+      { name: "HP Pavilion 15", price: 629, reason: "Solid all-rounder with good build quality", brand: "HP", ecosystem: "windows" },
+      { name: "Lenovo IdeaPad 5", price: 679, reason: "Good build, strong AMD performance", brand: "Lenovo", ecosystem: "windows" },
+    ],
+    vendors: [
+      { name: "Coolblue", price: 899, url: "https://coolblue.nl", badge: "Same-day delivery" },
+      { name: "MediaMarkt", price: 879, url: "https://mediamarkt.nl" },
+      { name: "Bol.com", price: 849, url: "https://bol.com", badge: "Free shipping" },
+      { name: "Alternate", price: 819, url: "https://alternate.nl" },
     ],
   },
 ];
+
+export function findProductEcosystem(productName: string): { brand: string; ecosystem: string } {
+  const lower = productName.toLowerCase();
+
+  for (const entry of productDatabase) {
+    if (entry.keywords.some((k) => lower.includes(k))) {
+      return { brand: entry.brand, ecosystem: entry.ecosystem };
+    }
+  }
+
+  // Pattern-based fallback
+  if (/iphone|macbook|ipad|airpod|apple watch/.test(lower)) return { brand: 'Apple', ecosystem: 'apple' };
+  if (/galaxy|samsung/.test(lower)) return { brand: 'Samsung', ecosystem: 'android' };
+  if (/pixel/.test(lower)) return { brand: 'Google', ecosystem: 'android' };
+  if (/ps5|playstation/.test(lower)) return { brand: 'Sony', ecosystem: 'playstation' };
+  if (/xbox/.test(lower)) return { brand: 'Microsoft', ecosystem: 'xbox' };
+  if (/nintendo/.test(lower)) return { brand: 'Nintendo', ecosystem: 'nintendo' };
+  if (/dyson/.test(lower)) return { brand: 'Dyson', ecosystem: 'dyson' };
+  if (/nespresso/.test(lower)) return { brand: 'Nespresso', ecosystem: 'nespresso' };
+  if (/nike/.test(lower)) return { brand: 'Nike', ecosystem: 'nike' };
+  if (/adidas/.test(lower)) return { brand: 'Adidas', ecosystem: 'adidas' };
+
+  return { brand: 'Unknown', ecosystem: 'generic' };
+}
 
 export function findCategory(productName: string): keyof typeof mockSpendingData.categories {
   const lower = productName.toLowerCase();

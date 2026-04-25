@@ -3,9 +3,11 @@ import {
   findCategory,
   findRetailers,
   getMockPriceHistory,
+  findProductEcosystem,
   Alternative,
   RetailerPrice,
   PriceHistory,
+  VendorPrice,
 } from "./mockData";
 
 export type Recommendation = "BUY" | "WAIT" | "CHOOSE_ALTERNATIVE" | "PRICE_NEEDED";
@@ -41,6 +43,65 @@ export interface AnalysisResult {
   confidence: number; // 0–100
   explanation: string;
   priceKnown: boolean;
+
+  productEcosystem: string;
+  bestSameEcosystemAlternative: Alternative | null;
+  bestCrossEcosystemAlternative: Alternative | null;
+  recommendedAlternative: Alternative | null;
+  switchesEcosystem: boolean;
+  ecosystemNote: string;
+
+  vendors: VendorPrice[];
+  cheapestVendor: VendorPrice | null;
+  vendorSavings: number;
+
+  fallback: boolean;
+}
+
+const ECOSYSTEM_NOTES: Partial<Record<string, Partial<Record<string, string>>>> = {
+  apple: {
+    android:      "Switching away from Apple means losing iMessage, AirDrop, and sync with your Mac or iPad. Your AirPods stay compatible but lose some features.",
+    windows:      "Windows offers more flexibility, but you'll lose iCloud integration and Handoff with your other Apple devices.",
+    'sony-audio': "Sony earbuds work with any device but lose Apple-specific features like automatic ear detection and Siri integration.",
+  },
+  android: {
+    apple: "Moving to iOS is a different ecosystem — Android apps won't transfer. If you own other Apple products, the integration is worth it.",
+  },
+  playstation: {
+    xbox:      "Xbox Game Pass is excellent value, but PlayStation exclusives (God of War, Spider-Man) stay locked to PS. Your PS Plus library won't transfer.",
+    nintendo:  "Nintendo Switch is a very different experience — portable-first, family-friendly titles. PS exclusives won't be available.",
+  },
+  xbox: {
+    playstation: "PlayStation has strong exclusives not available on Xbox. Your Game Pass subscription won't carry over.",
+    nintendo:    "Nintendo offers portability and unique exclusives. Xbox Game Pass won't be available on Switch.",
+  },
+  nintendo: {
+    playstation: "PlayStation offers higher performance and mature exclusives. You'll lose Nintendo's portable gaming format.",
+    xbox:        "Xbox offers more performance and Game Pass value. Nintendo exclusives (Zelda, Mario) stay with Nintendo.",
+  },
+  nespresso: {
+    generic: "Moving away from Nespresso means no Nespresso pod compatibility — but you gain freedom from proprietary capsule costs.",
+  },
+  dyson: {
+    generic: "Third-party vacuums can match Dyson's performance at lower cost, but lack Dyson's advanced filtration and premium build.",
+  },
+  nike: {
+    adidas: "Adidas Boost cushioning feels different from Nike Air. Fit and sizing vary between brands — worth trying on if possible.",
+  },
+  adidas: {
+    nike: "Nike Air cushioning is different from Adidas Boost. Performance and sizing vary between brands.",
+  },
+  'north-face': {
+    generic: "Columbia and Patagonia offer similar warmth and weather resistance. Slightly different fit profile than North Face.",
+  },
+};
+
+function getEcosystemSwitchNote(from: string, to: string): string {
+  return (
+    ECOSYSTEM_NOTES[from]?.[to] ??
+    ECOSYSTEM_NOTES[from]?.['generic'] ??
+    `Switching brands may affect compatibility with your existing accessories.`
+  );
 }
 
 export function analyzeProduct(
@@ -54,18 +115,70 @@ export function analyzeProduct(
   const categoryData = { label: getCategoryLabel(category) };
   const lower = productName.toLowerCase();
 
-  // Find matching alternatives
+  // Find matching alternatives and vendors
+  let foundInDatabase = false;
   let alternatives: Alternative[] = [];
+  let entryVendors: VendorPrice[] = [];
   for (const entry of productDatabase) {
     if (entry.keywords.some((k) => lower.includes(k))) {
       alternatives = entry.alternatives;
+      entryVendors = entry.vendors;
+      foundInDatabase = true;
       break;
     }
+  }
+
+  const sortedVendors = [...entryVendors].sort((a, b) => a.price - b.price).slice(0, 4);
+  const cheapestVendor = sortedVendors[0] ?? null;
+  const vendorSavings =
+    sortedVendors.length > 1
+      ? sortedVendors[sortedVendors.length - 1].price - sortedVendors[0].price
+      : 0;
+
+  // Unknown product — no database match, return fallback immediately
+  if (!foundInDatabase) {
+    const { ecosystem: productEcosystem } = findProductEcosystem(productName);
+    return {
+      productName,
+      productPrice: priceKnown ? productPrice : 0,
+      productUrl,
+      category,
+      categoryLabel: categoryData.label,
+      retailers: [],
+      cheapestRetailer: null,
+      retailerSavings: 0,
+      alternatives: [],
+      bestAlternative: null,
+      estimatedSavings: 0,
+      savingsPercent: 0,
+      budgetCheck: undefined,
+      recommendation: priceKnown ? "WAIT" : "PRICE_NEEDED",
+      confidence: 35,
+      explanation: "Limited data available for this product.",
+      priceKnown,
+      productEcosystem,
+      bestSameEcosystemAlternative: null,
+      bestCrossEcosystemAlternative: null,
+      recommendedAlternative: null,
+      switchesEcosystem: false,
+      ecosystemNote: '',
+      vendors: [],
+      cheapestVendor: null,
+      vendorSavings: 0,
+      fallback: true,
+    };
   }
 
   // No price — return alternatives only, skip all price-based logic
   if (!priceKnown) {
     const alts = alternatives.slice(0, 3);
+    const { ecosystem: productEcosystem } = findProductEcosystem(productName);
+    const sameEcoAlts = alts.filter(a => a.ecosystem === productEcosystem);
+    const crossEcoAlts = alts.filter(a => a.ecosystem !== productEcosystem);
+    const bestSameEcosystemAlternative = sameEcoAlts[0] ?? null;
+    const bestCrossEcosystemAlternative = crossEcoAlts[0] ?? null;
+    const recommendedAlternative = alts[0] ?? null;
+
     return {
       productName,
       productPrice: 0,
@@ -84,6 +197,16 @@ export function analyzeProduct(
       confidence: 0,
       explanation: "Enter the product price for a precise verdict.",
       priceKnown: false,
+      productEcosystem,
+      bestSameEcosystemAlternative,
+      bestCrossEcosystemAlternative,
+      recommendedAlternative,
+      switchesEcosystem: false,
+      ecosystemNote: '',
+      vendors: sortedVendors,
+      cheapestVendor,
+      vendorSavings,
+      fallback: false,
     };
   }
 
@@ -98,10 +221,42 @@ export function analyzeProduct(
       ? alternatives
       : generateGenericAlternatives(productName, productPrice);
 
-  const bestAlternative = finalAlternatives[0] ?? null;
+  // Ecosystem classification
+  const { ecosystem: productEcosystem } = findProductEcosystem(productName);
+  const cheaperAlts = finalAlternatives.filter(a => a.price < productPrice);
+  const sameEcoAlts  = cheaperAlts.filter(a => a.ecosystem === productEcosystem).sort((a, b) => a.price - b.price);
+  const crossEcoAlts = cheaperAlts.filter(a => a.ecosystem !== productEcosystem).sort((a, b) => a.price - b.price);
+
+  const bestSameEco  = sameEcoAlts[0]  ?? null;
+  const bestCrossEco = crossEcoAlts[0] ?? null;
+
+  const sameSavings  = bestSameEco  ? productPrice - bestSameEco.price  : 0;
+  const crossSavings = bestCrossEco ? productPrice - bestCrossEco.price : 0;
+
+  // Cross-ecosystem only if it saves >=40% more AND >=€50 more absolute
+  const crossIsWorthIt =
+    bestCrossEco !== null &&
+    bestSameEco  !== null &&
+    crossSavings > sameSavings * 1.4 &&
+    crossSavings - sameSavings > 50;
+
+  const recommendedAlternative =
+    crossIsWorthIt || (bestSameEco === null && bestCrossEco !== null)
+      ? bestCrossEco
+      : (bestSameEco ?? bestCrossEco ?? finalAlternatives[0] ?? null);
+
+  const switchesEcosystem =
+    recommendedAlternative !== null &&
+    productEcosystem !== 'generic' &&
+    recommendedAlternative.ecosystem !== productEcosystem;
+
+  const ecosystemNote = switchesEcosystem
+    ? getEcosystemSwitchNote(productEcosystem, recommendedAlternative!.ecosystem)
+    : '';
+
+  const bestAlternative = recommendedAlternative;
   const estimatedSavings = bestAlternative ? Math.max(0, productPrice - bestAlternative.price) : 0;
-  const savingsPercent =
-    estimatedSavings > 0 ? Math.round((estimatedSavings / productPrice) * 100) : 0;
+  const savingsPercent = estimatedSavings > 0 ? Math.round((estimatedSavings / productPrice) * 100) : 0;
 
   const retailers = findRetailers(productName, productPrice, category);
   const cheapestRetailer = retailers[0] ?? null;
@@ -153,6 +308,16 @@ export function analyzeProduct(
     confidence,
     explanation,
     priceKnown: true,
+    productEcosystem,
+    bestSameEcosystemAlternative: bestSameEco,
+    bestCrossEcosystemAlternative: bestCrossEco,
+    recommendedAlternative,
+    switchesEcosystem,
+    ecosystemNote,
+    vendors: sortedVendors,
+    cheapestVendor,
+    vendorSavings,
+    fallback: false,
   };
 }
 
@@ -325,8 +490,8 @@ function getCategoryLabel(category: string): string {
 
 function generateGenericAlternatives(name: string, price: number): Alternative[] {
   return [
-    { name: `${name} (Refurbished)`, price: Math.round(price * 0.7), reason: "Certified refurbished — same product, lower price" },
-    { name: `${name} (Previous Gen)`, price: Math.round(price * 0.8), reason: "Last year's model, nearly identical specs" },
-    { name: "Generic / Store Brand", price: Math.round(price * 0.55), reason: "Budget-friendly alternative for the same use case" },
+    { name: `${name} (Refurbished)`, price: Math.round(price * 0.7), reason: "Certified refurbished — same product, lower price", brand: 'Various', ecosystem: 'generic' },
+    { name: `${name} (Previous Gen)`, price: Math.round(price * 0.8), reason: "Last year's model, nearly identical specs", brand: 'Various', ecosystem: 'generic' },
+    { name: "Generic / Store Brand", price: Math.round(price * 0.55), reason: "Budget-friendly alternative for the same use case", brand: 'Various', ecosystem: 'generic' },
   ];
 }
