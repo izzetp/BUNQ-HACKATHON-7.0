@@ -99,6 +99,7 @@ const ECOSYSTEM_NOTES: Partial<Record<string, Partial<Record<string, string>>>> 
 
 function normalizeInput(input: string): string {
   return input.toLowerCase().trim()
+    .replace(/\([^)]*\)/g, ' ')   // strip parenthetical groups like "(Black)", "(256GB)"
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ').trim();
 }
@@ -106,8 +107,15 @@ function normalizeInput(input: string): string {
 function getStrongProductMatch(inputName: string): ProductEntry | null {
   const normalized = normalizeInput(inputName);
   for (const entry of productDatabase) {
-    if (entry.aliases.some(alias => normalizeInput(alias) === normalized)) {
-      return entry;
+    for (const alias of entry.aliases) {
+      const normalizedAlias = normalizeInput(alias);
+      // Always accept exact match
+      if (normalizedAlias === normalized) return entry;
+      // Multi-word alias: accept if the full alias phrase appears within the input.
+      // Single-word aliases require exact match — prevents "banana ps5" matching "ps5".
+      if (normalizedAlias.includes(' ') && normalized.includes(normalizedAlias)) {
+        return entry;
+      }
     }
   }
   return null;
