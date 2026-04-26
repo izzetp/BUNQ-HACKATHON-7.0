@@ -8,6 +8,7 @@
 An AI purchase decision assistant that helps users decide whether to buy, wait, or choose a better option — before money leaves their account.
 
 **Live demo:** https://bunq-hackathon-7-0-phi.vercel.app/
+> Note: After the hackathon, API-powered scanning was disabled in the public deployment to avoid ongoing usage costs. The demo remains available for exploring the prototype, and full functionality can be run locally with an API key.
 
 Validated with the official bunq sandbox toolkit (authentication + transaction endpoint access).
 
